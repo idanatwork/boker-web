@@ -199,3 +199,4 @@ button.big{border-radius:24px;min-height:60px;font-size:20px}
 .lvls{display:flex;gap:6px;align-items:center}.lvl{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:4px 12px;font:inherit;font-size:14px;min-height:32px}.lvl.on{background:var(--acc);border-color:var(--acc);color:var(--acc-fg);font-weight:600}
 .snds{display:grid;gap:8px}.sndrow{display:flex;gap:8px}.sndrow .snd{flex:1;text-align:start;padding:6px 14px;min-height:44px;border-radius:22px;font-size:16px}.sndrow .lvl:not(.snd){width:48px;padding:0}
 .opt-row{display:flex;gap:10px;align-items:center;font-size:16px}.opt-row input{width:22px;height:22px}
+#setBed input[type=time]{font-size:22px;font-weight:700;width:auto;min-width:0;height:44px;padding:0 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}#setBed .rowflex{gap:12px}
