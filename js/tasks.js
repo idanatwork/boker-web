@@ -36,8 +36,19 @@ export function thumbOf(video) { const { canvas } = grabSquare(video, 120); retu
 export function mathTask(box, ctx) {
   return new Promise((resolve) => {
     const total = 3; let n = 0, ans = '', q;
+    const lv = Math.min(3, Math.max(1, ctx.alarm.level || 2));
     const gen = () => {
       const k = n % 3;
+      if (lv === 1) {
+        if (k === 0) { const a = rand(10, 49), b = rand(5, 30); return { t: `${a} + ${b}`, r: a + b }; }
+        if (k === 1) { const a = rand(30, 69), b = rand(5, 29); return { t: `${a} - ${b}`, r: a - b }; }
+        const a = rand(2, 6), b = rand(2, 6); return { t: `${a} × ${b}`, r: a * b };
+      }
+      if (lv === 3) {
+        if (k === 0) { const a = rand(120, 489), b = rand(60, 349); return { t: `${a} + ${b}`, r: a + b }; }
+        if (k === 1) { const a = rand(300, 899), b = rand(80, 299); return { t: `${a} - ${b}`, r: a - b }; }
+        const a = rand(13, 29), b = rand(6, 12); return { t: `${a} × ${b}`, r: a * b };
+      }
       if (k === 0) { const a = rand(20, 89), b = rand(11, 70); return { t: `${a} + ${b}`, r: a + b }; }
       if (k === 1) { const a = rand(60, 99), b = rand(11, 55); return { t: `${a} - ${b}`, r: a - b }; }
       const a = rand(6, 12), b = rand(6, 12); return { t: `${a} × ${b}`, r: a * b };
@@ -52,7 +63,7 @@ export function mathTask(box, ctx) {
       else if (k === '✓') {
         if (ans !== '' && Number(ans) === q.r) { n++; if (n >= total) { box.textContent = ''; resolve(); return; } show(); return; }
         aEl.classList.remove('shake'); void aEl.offsetWidth; aEl.classList.add('shake'); haptic(40); ans = '';
-      } else if (ans.length < 4) ans += k;
+      } else if (ans.length < 5) ans += k;
       aEl.textContent = ans;
     };
     for (const k of ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', '✓']) {
@@ -71,36 +82,50 @@ export function mathTask(box, ctx) {
 // ---------- מודה אני בקול ----------
 export function mantraTask(box, ctx) {
   return new Promise((resolve) => {
-    const NEED = 4;
-    const bar = el('i'); const hint = el('p', { class: 'note', 'aria-live': 'polite' }, 'אמור בקול רם. הצליל יושתק כשתתחיל.');
+    const NEED = 3;
+    const bar = el('i'); const hint = el('p', { class: 'note', 'aria-live': 'polite' }, 'לחץ על התחל ואמור בקול רם. הצליל יושתק כשתתחיל.');
+    const meter = el('div', { class: 'prog', 'aria-hidden': 'true' }, el('i')); const lvl = meter.firstChild; lvl.style.opacity = '.45';
     const start = el('button', { class: 'primary big' }, icon('mic'), 'התחל');
     const alt = el('button', { class: 'ghost', hidden: true }, 'המיקרופון לא עובד, עבור לחשבון');
     box.textContent = '';
     box.append(el('p', { class: 'task-title' }, 'אמור בקול רם'),
       el('div', { class: 'mantra' }, 'מוֹדֶה אֲנִי לְפָנֶיךָ מֶלֶךְ חַי וְקַיָּם, שֶׁהֶחֱזַרְתָּ בִּי נִשְׁמָתִי בְּחֶמְלָה, רַבָּה אֱמוּנָתֶךָ.'),
-      el('div', { class: 'prog' }, bar), hint, start, alt);
+      el('div', { class: 'prog' }, bar), meter, hint, start, alt);
     alt.addEventListener('click', async () => { ctx.audio.mute(false); await mathTask(box, ctx); resolve(); });
     start.addEventListener('click', async () => {
       start.disabled = true; hint.textContent = 'מבקש גישה למיקרופון...';
+      // iOS: חייבים ליצור ולהפעיל את ה-AudioContext בתוך הלחיצה, לפני ההמתנה להרשאה
+      let ac;
+      try { ac = ctx.audio.ensure(); ac.resume?.().catch(() => {}); } catch { /* */ }
       let stream;
-      try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false } }); }
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } }); }
       catch { hint.textContent = 'אין גישה למיקרופון. אפשר לאשר אותה בהגדרות ולנסות שוב.'; hint.classList.add('bad'); start.disabled = false; alt.hidden = false; return; }
       ctx.audio.mute(true);
-      const ac = ctx.audio.ensure(); const src = ac.createMediaStreamSource(stream), an = ac.createAnalyser(); an.fftSize = 1024; src.connect(an);
+      if (!ac) ac = ctx.audio.ensure();
+      try { await ac.resume(); } catch { /* */ }
+      const src = ac.createMediaStreamSource(stream), an = ac.createAnalyser(); an.fftSize = 2048; an.smoothingTimeConstant = 0; src.connect(an);
       const buf = new Float32Array(an.fftSize);
-      let cancelled = false, loud = 0, last = performance.now(), base = 0, baseN = 0;
+      let cancelled = false, loud = 0, last = performance.now(), t0 = last, floor = Infinity, peak = 0, frames = 0;
       ctx.cleanup(() => { cancelled = true; stopStream(stream); });
       start.hidden = true; hint.classList.remove('bad'); hint.textContent = 'מקשיב... דבר בקול רם';
+      let warned = false;
       const loop = () => {
         if (cancelled) return;
+        if (ac.state !== 'running') ac.resume().catch(() => {});
         an.getFloatTimeDomainData(buf);
         let s = 0; for (const v of buf) s += v * v;
-        const rms = Math.sqrt(s / buf.length), now = performance.now(), dt = (now - last) / 1000; last = now;
-        if (baseN < 15) { base += rms; baseN++; if (baseN === 15) base /= 15; }
-        else {
-          if (rms > Math.max(0.06, base * 3)) loud += dt;
+        const rms = Math.sqrt(s / buf.length), now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now; frames++;
+        peak = Math.max(peak, rms);
+        if (frames > 5 && frames < 40) floor = Math.min(floor, rms);
+        const thr = Math.max(0.012, (isFinite(floor) ? floor : 0) * 2.5);
+        lvl.style.width = Math.min(100, (rms / (thr * 3)) * 100) + '%';
+        if (frames >= 20) {
+          if (rms > thr) loud += dt; else loud = Math.max(0, loud - dt * 0.25);
           bar.style.width = Math.min(100, (loud / NEED) * 100) + '%';
           if (loud >= NEED) { stopStream(stream); src.disconnect(); ctx.audio.mute(false); box.textContent = ''; resolve(); return; }
+        }
+        if (!warned && now - t0 > 4000 && peak < 0.0005) {
+          warned = true; hint.classList.add('bad'); hint.textContent = 'לא נקלט שום צליל מהמיקרופון. בדוק שהמיקרופון לא חסום, או עבור לחשבון.'; alt.hidden = false;
         }
         requestAnimationFrame(loop);
       };
@@ -213,6 +238,6 @@ export const RUNNERS = { math: mathTask, pushups: pushupsTask, mantra: mantraTas
 export const TASK_INFO = {
   math: { name: 'חשבון', desc: 'שלושה תרגילים קצרים', em: '🧮' },
   pushups: { name: 'שכיבות סמיכה', desc: 'המצלמה סופרת אותך', em: '💪' },
-  mantra: { name: 'מודה אני בקול', desc: 'להגיד בקול רם, 4 שניות', em: '📣' },
+  mantra: { name: 'מודה אני בקול', desc: 'להגיד בקול רם, 3 שניות', em: '📣' },
   brush: { name: 'צילום המברשת', desc: 'להראות למצלמה את המברשת', em: '🪥' },
 };

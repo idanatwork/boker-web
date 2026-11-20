@@ -61,7 +61,7 @@ export function showSplash() {
   const sp = $('splash');
   if (sessionStorage.getItem('bw-splash')) return;
   sessionStorage.setItem('bw-splash', '1');
-  $('splashTitle').textContent = profile.name ? `השעון של ${profile.name}` : 'השעון שלי';
+  $('splashTitle').textContent = profile.name ? `השעון של ${profile.name}` : 'קום אח שלי';
   const ph = $('splashPhoto'); ph.textContent = '';
   if (profile.photo) ph.append(el('img', { src: profile.photo, alt: '' })); else ph.innerHTML = HELMET_SVG;
   sp.hidden = false;

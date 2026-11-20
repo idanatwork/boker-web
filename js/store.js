@@ -8,7 +8,7 @@ export function migrate(s) {
   for (const a of s.alarms) {
     if (!a.tasks) a.tasks = LEGACY[a.task] || ['math'];
     delete a.task;
-    a.reps ||= 10; a.snooze ||= 0;
+    a.reps ||= 10; a.snooze ||= 0; a.level ||= 2;
   }
   return s;
 }

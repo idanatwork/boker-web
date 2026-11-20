@@ -1,4 +1,4 @@
-const CACHE = 'boker-web-v3';
+const CACHE = 'boker-web-v4';
 const VISION = 'boker-vision-v1';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icons/icon-192.png', 'js/ui.js', 'js/store.js', 'js/tasks.js', 'js/vision.js', 'js/pushups-logic.js', 'js/brush-logic.js', 'js/profile.js'];
 const VISION_HOSTS = ['cdn.jsdelivr.net', 'storage.googleapis.com'];
@@ -29,8 +29,8 @@ self.addEventListener('fetch', (e) => {
 
 self.addEventListener('push', (e) => {
   let d = {};
-  try { d = e.data ? e.data.json() : {}; } catch { d = { title: 'בוקר-ווב', body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'בוקר-ווב', {
+  try { d = e.data ? e.data.json() : {}; } catch { d = { title: 'קום אח שלי', body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'קום אח שלי', {
     body: d.body || '', tag: d.tag || 'alarm', renotify: true, requireInteraction: !!d.ring,
     lang: 'he', dir: 'rtl', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
     data: { alarmId: d.alarmId || null, ring: !!d.ring },

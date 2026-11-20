@@ -1,4 +1,4 @@
-// בוקר-ווב: לקוח PWA.
+// קום אח שלי: לקוח PWA.
 import { $, el, icon, toast, haptic, pad2, fmtRel } from './js/ui.js';
 import { loadStore, saveStore, todayStr, computeStreak, nextAlarm, TASK_ORDER } from './js/store.js';
 import { RUNNERS, TASK_INFO, openCamera, stopStream, grabSquare, thumbOf, cameraErrorText } from './js/tasks.js';
@@ -172,7 +172,7 @@ let editing = null, draft = null;
 const SNOOZES = [[0, 'ללא'], [5, '5 דקות'], [10, '10 דקות']];
 function openEditor(a) {
   editing = a || null;
-  draft = a ? { ...a, days: [...a.days], tasks: [...a.tasks] } : { time: '06:30', days: [], label: '', tasks: ['math'], reps: 10, snooze: 0, enabled: true };
+  draft = a ? { ...a, days: [...a.days], tasks: [...a.tasks] } : { time: '06:30', days: [], label: '', tasks: ['math'], reps: 10, snooze: 0, level: 2, enabled: true };
   $('editTitle').textContent = a ? 'עריכת שעון' : 'שעון חדש';
   $('fTime').value = draft.time; $('fLabel').value = draft.label;
   $('fDelete').hidden = !a; $('taskErr').hidden = true;
@@ -206,6 +206,13 @@ function renderEditorTasks() {
       const out = el('output', {}, String(draft.reps));
       const mk = (d, l) => el('button', { type: 'button', 'aria-label': l, onclick: (e) => { e.preventDefault(); e.stopPropagation(); draft.reps = Math.min(50, Math.max(1, draft.reps + d)); out.textContent = draft.reps; } }, d > 0 ? '+' : '−');
       tx.append(el('div', { class: 'sub', onclick: (e) => { e.preventDefault(); e.stopPropagation(); } }, 'חזרות:', el('div', { class: 'stepper' }, mk(-1, 'פחות'), out, mk(1, 'יותר'))));
+    }
+    if (on && t === 'math') {
+      const row = el('div', { class: 'sub lvls', role: 'group', 'aria-label': 'רמת קושי', onclick: (e) => { e.preventDefault(); e.stopPropagation(); } }, 'רמה:');
+      for (const [v, l] of [[1, 'קל'], [2, 'בינוני'], [3, 'קשה']]) {
+        row.append(el('button', { type: 'button', class: 'lvl' + ((draft.level || 2) === v ? ' on' : ''), 'aria-pressed': String((draft.level || 2) === v), onclick: (e) => { e.preventDefault(); e.stopPropagation(); draft.level = v; haptic(6); renderEditorTasks(); } }, l));
+      }
+      tx.append(row);
     }
     if (on && t === 'brush') {
       tx.append(el('div', { class: 'sub' }, store.brushRef ? el('span', { class: 'ok' }, 'תמונת ייחוס קיימת') : el('span', { class: 'bad' }, 'חסרה תמונת ייחוס'),
@@ -335,7 +342,7 @@ const tickRingClock = () => { const d = new Date(); $('ringClock').textContent =
 function startRing(alarmId, { demo = false, tasks = null } = {}) {
   if (ringState) return;
   const saved = store.alarms.find((a) => a.id === alarmId);
-  const alarm = demo ? { id: 'demo', label: 'בדיקה', tasks: tasks || ['math'], reps: Math.min(3, saved?.reps || 3), snooze: 5 } : saved || { id: alarmId, label: '', tasks: ['math'], reps: 10, snooze: 0 };
+  const alarm = demo ? { id: 'demo', label: 'בדיקה', tasks: tasks || ['math'], reps: Math.min(3, saved?.reps || 3), level: saved?.level || 2, snooze: 5 } : saved || { id: alarmId, label: '', tasks: ['math'], reps: 10, snooze: 0, level: 2 };
   ringState = { alarm, startedAt: Date.now(), demo, cleanup: [], stepIdx: 0, snoozes: 0 };
   $('ringLabel').textContent = alarm.label || '';
   $('ring').classList.remove('calm');
@@ -428,7 +435,7 @@ setInterval(() => {
 }, 1000);
 
 // ---------- אתחול ----------
-$('ver').textContent = 'בוקר-ווב ' + CFG.VERSION;
+$('ver').textContent = 'קום אח שלי ' + CFG.VERSION;
 applyIcon();
 renderAll();
 showSplash();
