@@ -147,6 +147,7 @@ function openEditor(a) {
 }
 $('addBtn').addEventListener('click', () => openEditor(null));
 $('fCancel').addEventListener('click', () => { $('editor').hidden = true; });
+$('editBack').addEventListener('click', () => { $('editor').hidden = true; });
 $('fDelete').addEventListener('click', () => {
   store.alarms = store.alarms.filter((x) => x !== editing); save(); renderAlarms(); syncAlarms(); $('editor').hidden = true;
 });
@@ -233,7 +234,7 @@ function tickRingClock() { const d = new Date(); $('ringClock').textContent = `$
 function startRing(alarmId, { demo = false } = {}) {
   if (ringState) return;
   const alarm = store.alarms.find((a) => a.id === alarmId) || { id: alarmId, task: 'math', label: '' };
-  ringState = { alarm, startedAt: Date.now(), demo };
+  ringState = { alarm, startedAt: Date.now(), demo, cleanup: [] };
   $('ringLabel').textContent = alarm.label || '';
   $('ring').hidden = false;
   tickRingClock(); clockTimer = setInterval(tickRingClock, 1000);
@@ -289,9 +290,11 @@ function mantraTask() {
       const ctx = ensureAudio();
       const src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(); an.fftSize = 1024; src.connect(an);
       const buf = new Float32Array(an.fftSize);
-      let loud = 0, last = performance.now(), base = null, baseN = 0;
+      let loud = 0, last = performance.now(), base = null, baseN = 0, cancelled = false;
+      ringState?.cleanup.push(() => { cancelled = true; stream.getTracks().forEach((t) => t.stop()); });
       $('mStart').hidden = true; $('mHint').textContent = 'מקשיב... אמור בקול רם';
       const loop = () => {
+        if (cancelled) return;
         an.getFloatTimeDomainData(buf);
         let s = 0; for (const v of buf) s += v * v;
         const rms = Math.sqrt(s / buf.length);
@@ -311,8 +314,20 @@ function mantraTask() {
   });
 }
 
+function closeRing() {
+  ringState?.cleanup.forEach((f) => { try { f(); } catch { /* */ } });
+  stopSound(); clearInterval(clockTimer); muted = false;
+  $('ring').hidden = true; $('task').textContent = ''; $('ringSound').hidden = true; ringState = null;
+  history.replaceState(null, '', location.pathname);
+}
+$('ringBack').addEventListener('click', () => {
+  if (ringState && !ringState.demo && !ringState.done && !confirm('לצאת מהמסך? השעון לא יכובה וימשיך להתריע עד שתסיים את המשימה.')) return;
+  closeRing();
+});
+
 function finishRing() {
   const { alarm, startedAt, demo } = ringState;
+  ringState.done = true;
   const secs = Math.round((Date.now() - startedAt) / 1000);
   stopSound(); clearInterval(clockTimer);
   if (!demo) {
@@ -324,7 +339,7 @@ function finishRing() {
   const s = computeStreak();
   $('task').innerHTML = `<h2>בוקר טוב</h2><p class="note">כובה אחרי ${secs} שניות. ${demo ? 'זו הייתה בדיקה.' : 'רצף: ' + s.now + ' ימים.'}</p><button id="ringClose" class="primary big">סגור</button>`;
   $('ringLabel').textContent = '';
-  $('ringClose').addEventListener('click', () => { $('ring').hidden = true; $('task').textContent = ''; ringState = null; history.replaceState(null, '', location.pathname); });
+  $('ringClose').addEventListener('click', closeRing);
 }
 
 // ---------- מצב לילה ושעון מקומי ----------
@@ -346,7 +361,9 @@ function nextAlarmText() {
 }
 function renderNight() { const d = new Date(); $('nightClock').textContent = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; $('nightNext').textContent = nextAlarmText(); }
 $('nightBtn').addEventListener('click', async () => { ensureAudio(); $('night').hidden = false; renderNight(); nightTimer = setInterval(renderNight, 5000); await lockScreen(); });
-$('night').addEventListener('click', () => { $('night').hidden = true; clearInterval(nightTimer); wakeLock?.release().catch(() => {}); wakeLock = null; });
+const exitNight = () => { $('night').hidden = true; clearInterval(nightTimer); wakeLock?.release().catch(() => {}); wakeLock = null; };
+$('night').addEventListener('click', exitNight);
+$('nightBack').addEventListener('click', (e) => { e.stopPropagation(); exitNight(); });
 
 function localCheck() {
   if (ringState) return;

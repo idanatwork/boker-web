@@ -36,7 +36,7 @@
 
 <div id="editor" class="sheet" hidden>
   <form id="editForm" class="card">
-    <h2 id="editTitle">שעון חדש</h2>
+    <div class="navbar"><button type="button" class="back" id="editBack">‹ חזרה</button><h2 id="editTitle">שעון חדש</h2></div>
     <label>שעה <input type="time" id="fTime" required value="06:30"></label>
     <fieldset><legend>ימים</legend><div id="fDays" class="chips"></div></fieldset>
     <label>תווית <input type="text" id="fLabel" maxlength="40" placeholder="אופציונלי"></label>
@@ -52,6 +52,7 @@
 </div>
 
 <div id="ring" class="ring" hidden>
+  <button id="ringBack" class="back ring-back">‹ חזרה</button>
   <div class="ring-inner">
     <div id="ringClock" class="ring-clock"></div>
     <div id="ringLabel" class="ring-label"></div>
@@ -61,6 +62,7 @@
 </div>
 
 <div id="night" class="night" hidden>
+  <button id="nightBack" class="back night-back">‹ חזרה</button>
   <div id="nightClock" class="night-clock"></div>
   <div id="nightNext" class="night-next"></div>
   <div class="night-hint">השאר את האפליקציה פתוחה והטלפון על המטען. הקש כדי לצאת.</div>
