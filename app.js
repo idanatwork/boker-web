@@ -4,6 +4,7 @@ import { loadStore, saveStore, todayStr, computeStreak, nextAlarm, TASK_ORDER } 
 import { RUNNERS, TASK_INFO, openCamera, stopStream, grabSquare, thumbOf, cameraErrorText } from './js/tasks.js';
 import { signature } from './js/brush-logic.js';
 import { loadPose } from './js/vision.js';
+import { profile, setName, setPhotoFromFile, clearPhoto, makeIcon, applyIcon, avatarNode, confetti, showSplash } from './js/profile.js';
 
 const CFG = window.BW_CONFIG;
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Jerusalem';
@@ -125,7 +126,13 @@ function renderSetup() {
 const daysLabel = (a) => (!a.days?.length || a.days.length === 7 ? 'כל יום' : a.days.slice().sort().map((d) => DAYS[d]).join(' '));
 const tasksLabel = (a) => a.tasks.map((t) => TASK_INFO[t].name).join(', ');
 
+function renderGreet() {
+  const g = $('greet'); g.textContent = '';
+  const hr = new Date().getHours(); const hi = hr < 5 ? 'לילה טוב' : hr < 12 ? 'בוקר טוב' : hr < 18 ? 'צהריים טובים' : 'ערב טוב';
+  g.append(avatarNode(), el('div', {}, el('div', { class: 'greet-t' }, profile.name ? `${hi}, ${profile.name}!` : `${hi}!`), el('div', { class: 'greet-s' }, 'מוכנים לקום כמו ויקינגים?')));
+}
 function renderHero() {
+  renderGreet();
   const h = $('hero'); h.textContent = '';
   const n = nextAlarm(store.alarms);
   if (!n) { h.append(el('div', { class: 'hero-l' }, 'אין שעון פעיל'), el('div', { class: 'hero-t', style: 'opacity:.25' }, '--:--')); return; }
@@ -204,7 +211,7 @@ function renderEditorTasks() {
       tx.append(el('div', { class: 'sub' }, store.brushRef ? el('span', { class: 'ok' }, 'תמונת ייחוס קיימת') : el('span', { class: 'bad' }, 'חסרה תמונת ייחוס'),
         el('button', { type: 'button', class: 'link', onclick: (e) => { e.preventDefault(); e.stopPropagation(); openRefCam(); } }, store.brushRef ? 'צלם מחדש' : 'צלם עכשיו')));
     }
-    box.append(el('label', { class: 'opt' + (on ? ' on' : '') }, c, el('span', { class: 'mark' }, on ? icon('check', 14) : ''), tx));
+    box.append(el('label', { class: 'opt' + (on ? ' on' : ''), 'data-t': t }, c, el('span', { class: 'em' }, TASK_INFO[t].em), tx, el('span', { class: 'mark' }, on ? icon('check', 14) : '')));
   }
 }
 function renderEditorSnooze() {
@@ -276,7 +283,21 @@ function renderSettings() {
   const i = $('setInfo'); i.textContent = '';
   for (const [k, v] of [['גרסה', CFG.VERSION], ['אזור זמן', TZ], ['מכשיר', store.deviceId.slice(0, 8)], ['שרת', apiReady() ? 'מחובר' : 'לא מחובר'], ['מותקן', standalone ? 'כן' : 'לא']]) i.append(el('div', { class: 'kv' }, el('span', {}, k), el('span', { dir: 'auto' }, v)));
 }
-$('settingsBtn').addEventListener('click', () => openScreen('settings', renderSettings));
+function renderProfileSettings() {
+  const ph = $('spPhoto'); ph.textContent = ''; ph.append(...avatarNode('x').childNodes);
+  $('nameInput').value = profile.name || ''; $('photoDel').hidden = !profile.photo; $('photoBtn').textContent = profile.photo ? 'החלף תמונה' : 'בחר תמונה';
+  $('iconBtn').disabled = !profile.photo;
+}
+$('nameInput').addEventListener('input', () => { setName($('nameInput').value); renderGreet(); });
+$('photoBtn').addEventListener('click', () => $('photoFile').click());
+$('photoFile').addEventListener('change', async () => {
+  const f = $('photoFile').files[0]; if (!f) return;
+  try { await setPhotoFromFile(f); toast('התמונה נשמרה במכשיר. נוצר גם אייקון אישי.'); } catch { toast('לא הצלחתי לקרוא את התמונה.', { kind: 'err' }); }
+  $('photoFile').value = ''; renderProfileSettings(); renderGreet();
+});
+$('photoDel').addEventListener('click', () => { clearPhoto(); renderProfileSettings(); renderGreet(); toast('התמונה הוסרה'); });
+$('iconBtn').addEventListener('click', async () => { await makeIcon(); toast('האייקון עודכן. עכשיו מוסיפים למסך הבית מחדש.', { ms: 5000 }); });
+$('settingsBtn').addEventListener('click', () => openScreen('settings', () => { renderSettings(); renderProfileSettings(); }));
 $('resetBtn').addEventListener('click', () => {
   if (!confirm('למחוק את כל השעונים וההיסטוריה במכשיר הזה?')) return;
   localStorage.removeItem('bw'); location.replace(location.pathname);
@@ -378,7 +399,7 @@ function finishRing() {
   $('task').append(el('div', { class: 'done' }, el('div', { class: 'check' }, icon('check', 44)), el('h2', {}, 'בוקר טוב'),
     el('p', { class: 'note' }, rs.demo ? 'זו הייתה בדיקה, הרצף לא הושפע.' : `כובה אחרי ${secs} שניות. רצף של ${s.now} ${s.now === 1 ? 'יום' : 'ימים'}.`),
     el('button', { class: 'primary big', style: 'margin-top:24px', onclick: closeRing }, 'סגור')));
-  haptic(60);
+  haptic(60); if (!rs.demo) confetti(); else confetti();
 }
 
 // ---------- מצב לילה ושעון מקומי ----------
@@ -408,7 +429,9 @@ setInterval(() => {
 
 // ---------- אתחול ----------
 $('ver').textContent = 'בוקר-ווב ' + CFG.VERSION;
+applyIcon();
 renderAll();
+showSplash();
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').then((r) => { swReg = r; refreshSubscription(); }).catch(() => {});
   navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.type === 'ring') startRing(e.data.alarmId); });

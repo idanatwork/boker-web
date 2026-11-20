@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#121413" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fff7ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1d1840" media="(prefers-color-scheme: dark)">
 <meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -17,6 +17,13 @@
 <title>בוקר-ווב</title>
 </head>
 <body>
+<div id="splash" class="splash" hidden role="presentation">
+  <span class="st" style="top:12%;right:14%">⭐</span><span class="st" style="top:22%;left:12%;animation-delay:.5s">✨</span><span class="st" style="bottom:22%;right:10%;animation-delay:1s">⭐</span><span class="st" style="bottom:30%;left:14%;animation-delay:1.4s">✨</span>
+  <div id="splashPhoto" class="photo"></div>
+  <h1 id="splashTitle">השעון שלי</h1>
+  <p>קדימה לקום, ויקינג! ⚔️</p>
+  <small>הקש כדי להמשיך</small>
+</div>
 
 <section id="home" class="screen">
   <header class="bar home-bar">
@@ -27,6 +34,7 @@
     </div>
   </header>
   <main class="content">
+    <div id="greet" class="greet"></div>
     <div id="hero" class="hero"></div>
     <section id="setup" class="card" hidden></section>
     <section class="block">
@@ -89,6 +97,17 @@
 <section id="settings" class="screen" hidden role="dialog" aria-modal="true" aria-labelledby="setTitle">
   <header class="bar"><button class="back" data-back></button><h2 id="setTitle">הגדרות</h2><span class="bar-spacer"></span></header>
   <main class="content">
+    <section class="block"><div class="block-head"><h2>מי מתעורר?</h2></div>
+      <div class="card">
+        <div class="photoset"><div id="spPhoto" class="sp-photo"></div><div>
+          <label class="field" style="margin:0 0 8px">שם<input type="text" id="nameInput" maxlength="20" placeholder="לדוגמה: יורן" autocomplete="off"></label>
+          <div class="rowflex"><button id="photoBtn" class="ghost sm">בחר תמונה</button><button id="photoDel" class="link" hidden>הסר</button></div>
+        </div></div>
+        <input type="file" id="photoFile" accept="image/*" hidden>
+        <p class="note" style="margin-top:12px">התמונה והשם נשמרים רק במכשיר הזה. הם לא עולים לשרת או לגיטהאב.</p>
+        <div class="rowflex" style="margin-top:12px"><button id="iconBtn" class="primary sm">צור אייקון אישי</button></div>
+        <p class="note" id="iconNote" style="margin-top:8px">האייקון נוצר מהתמונה ומהווה את האייקון כשמוסיפים למסך הבית. אחרי היצירה: מחק את האפליקציה מהמסך הבית, פתח את האתר ב-Safari והוסף למסך הבית מחדש.</p>
+      </div></section>
     <section class="block"><div class="block-head"><h2>התראות</h2></div><div id="setNotif" class="card"></div></section>
     <section class="block"><div class="block-head"><h2>תמונת ייחוס למברשת</h2></div><div id="setBrush" class="card"></div></section>
     <section class="block"><div class="block-head"><h2>נסה משימה</h2></div>

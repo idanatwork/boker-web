@@ -211,8 +211,8 @@ export function brushTask(box, ctx) {
 
 export const RUNNERS = { math: mathTask, pushups: pushupsTask, mantra: mantraTask, brush: brushTask };
 export const TASK_INFO = {
-  math: { name: 'חשבון', desc: 'שלושה תרגילים קצרים' },
-  pushups: { name: 'שכיבות סמיכה', desc: 'המצלמה סופרת אותך' },
-  mantra: { name: 'מודה אני בקול', desc: 'להגיד בקול רם, 4 שניות' },
-  brush: { name: 'צילום המברשת', desc: 'להראות למצלמה את המברשת' },
+  math: { name: 'חשבון', desc: 'שלושה תרגילים קצרים', em: '🧮' },
+  pushups: { name: 'שכיבות סמיכה', desc: 'המצלמה סופרת אותך', em: '💪' },
+  mantra: { name: 'מודה אני בקול', desc: 'להגיד בקול רם, 4 שניות', em: '📣' },
+  brush: { name: 'צילום המברשת', desc: 'להראות למצלמה את המברשת', em: '🪥' },
 };
