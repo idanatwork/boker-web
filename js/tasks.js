@@ -200,44 +200,86 @@ export function pushupsTask(box, ctx) {
   });
 }
 
-// ---------- צילום מברשת ----------
-export function brushTask(box, ctx) {
+// ---------- צילום מול תמונת ייחוס (מברשת, מיטה) ----------
+function refTask(key, refKey, L) {
+  return function (box, ctx) {
+    return new Promise((resolve) => {
+      const ref = ctx.store[refKey];
+      box.textContent = '';
+      if (!ref) {
+        box.append(el('p', { class: 'task-title' }, 'אין תמונת ייחוס'), el('p', { class: 'note bad' }, L.noRef));
+        setTimeout(async () => { await mathTask(box, ctx); resolve(); }, 1500);
+        return;
+      }
+      const video = el('video', { playsinline: '', muted: '', class: 'cam-video back' });
+      const badge = el('div', { class: 'cam-badge' }, el('span', { class: 'spin' }), el('span', { class: 'cam-badge-t', text: 'פותח מצלמה...' }));
+      const hint = el('p', { class: 'note', 'aria-live': 'polite' }, L.hint);
+      const shutter = el('button', { class: 'primary big', disabled: true }, icon('camera'), 'צלם');
+      const alt = el('button', { class: 'ghost', hidden: true }, 'לא מצליח, עבור לחשבון');
+      const refImg = el('img', { class: 'refthumb', src: ref.thumb, alt: 'תמונת הייחוס' });
+      box.append(el('p', { class: 'task-title' }, L.title), el('div', { class: 'cam' }, video, badge, el('div', { class: 'refbox' }, refImg, el('span', { text: 'ייחוס' }))), hint, shutter, alt);
+      let stream = null, fails = 0, cancelled = false;
+      ctx.cleanup(() => { cancelled = true; stopStream(stream); });
+      alt.addEventListener('click', async () => { stopStream(stream); await mathTask(box, ctx); resolve(); });
+      openCamera(video, 'environment').then((s) => { stream = s; badge.hidden = true; shutter.disabled = false; if (cancelled) stopStream(s); })
+        .catch((e) => { badge.textContent = cameraErrorText(e); badge.classList.add('err'); alt.hidden = false; });
+      shutter.addEventListener('click', () => {
+        const { img } = grabSquare(video); const score = similarity(ref.sig, signature(img));
+        const pct = Math.round(score * 100);
+        if (score >= BRUSH_THRESHOLD) { haptic(30); cancelled = true; stopStream(stream); box.textContent = ''; resolve(); return; }
+        fails++; haptic(50);
+        hint.classList.add('bad'); hint.textContent = `לא נראה כמו תמונת הייחוס (התאמה ${pct}%). נסה שוב מאותה זווית.`;
+        shutter.classList.remove('shake'); void shutter.offsetWidth; shutter.classList.add('shake');
+        if (fails >= 3) alt.hidden = false;
+      });
+    });
+  };
+}
+export const brushTask = refTask('brush', 'brushRef', { title: 'צלם את המברשת', noRef: 'צריך לצלם פעם אחת את המברשת בהגדרות. עוברים לחשבון.', hint: 'צלם את המברשת באותו מקום ובאותה זווית כמו בתמונת הייחוס.' });
+export const bedTask = refTask('bed', 'bedRef', { title: 'סדר את המיטה וצלם', noRef: 'צריך לצלם פעם אחת מיטה מסודרת. עוברים לחשבון.', hint: 'סדר את המיטה וצלם אותה מאותה זווית כמו בתמונת הייחוס.' });
+
+// ---------- צילום שמיים ----------
+// בדיקה גסה (בלי ML): החצי העליון של התמונה בהיר או כחלחל/אפור-בהיר וחלק יחסית, ולא חשוך.
+export function looksLikeSky(img) {
+  const { data, width: w, height: h } = img; let n = 0, lum = 0, blue = 0, sat = 0, lum2 = 0;
+  for (let y = 0; y < h * 0.5; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4, r = data[i], g = data[i + 1], b = data[i + 2], l = 0.299 * r + 0.587 * g + 0.114 * b;
+    lum += l; lum2 += l * l; n++; if (b >= r - 8) blue++; sat += Math.max(r, g, b) - Math.min(r, g, b);
+  }
+  const m = lum / n, sd = Math.sqrt(Math.max(0, lum2 / n - m * m));
+  return { ok: m > 70 && blue / n > 0.6 && sd < 60, m, sd, blue: blue / n };
+}
+export function skyTask(box, ctx) {
   return new Promise((resolve) => {
-    const ref = ctx.store.brushRef;
-    box.textContent = '';
-    if (!ref) {
-      box.append(el('p', { class: 'task-title' }, 'אין תמונת ייחוס'), el('p', { class: 'note bad' }, 'צריך לצלם פעם אחת את המברשת בהגדרות. עוברים לחשבון.'));
-      setTimeout(async () => { await mathTask(box, ctx); resolve(); }, 1500);
-      return;
-    }
     const video = el('video', { playsinline: '', muted: '', class: 'cam-video back' });
     const badge = el('div', { class: 'cam-badge' }, el('span', { class: 'spin' }), el('span', { class: 'cam-badge-t', text: 'פותח מצלמה...' }));
-    const hint = el('p', { class: 'note', 'aria-live': 'polite' }, 'צלם את המברשת באותו מקום ובאותה זווית כמו בתמונת הייחוס.');
+    const hint = el('p', { class: 'note', 'aria-live': 'polite' }, 'פתח את התריס, כוון את המצלמה לשמיים וצלם.');
     const shutter = el('button', { class: 'primary big', disabled: true }, icon('camera'), 'צלם');
     const alt = el('button', { class: 'ghost', hidden: true }, 'לא מצליח, עבור לחשבון');
-    const refImg = el('img', { class: 'refthumb', src: ref.thumb, alt: 'תמונת הייחוס' });
-    box.append(el('p', { class: 'task-title' }, 'צלם את המברשת'), el('div', { class: 'cam' }, video, badge, el('div', { class: 'refbox' }, refImg, el('span', { text: 'ייחוס' }))), hint, shutter, alt);
+    box.textContent = '';
+    box.append(el('p', { class: 'task-title' }, 'צלם את השמיים'), el('div', { class: 'cam' }, video, badge), hint, shutter, alt);
     let stream = null, fails = 0, cancelled = false;
     ctx.cleanup(() => { cancelled = true; stopStream(stream); });
     alt.addEventListener('click', async () => { stopStream(stream); await mathTask(box, ctx); resolve(); });
     openCamera(video, 'environment').then((s) => { stream = s; badge.hidden = true; shutter.disabled = false; if (cancelled) stopStream(s); })
       .catch((e) => { badge.textContent = cameraErrorText(e); badge.classList.add('err'); alt.hidden = false; });
     shutter.addEventListener('click', () => {
-      const { img } = grabSquare(video); const score = similarity(ref.sig, signature(img));
-      const pct = Math.round(score * 100);
-      if (score >= BRUSH_THRESHOLD) { haptic(30); cancelled = true; stopStream(stream); box.textContent = ''; resolve(); return; }
+      const { img } = grabSquare(video, 64); const r = looksLikeSky(img);
+      if (r.ok) { haptic(30); cancelled = true; stopStream(stream); box.textContent = ''; resolve(); return; }
       fails++; haptic(50);
-      hint.classList.add('bad'); hint.textContent = `לא נראה כמו תמונת הייחוס (התאמה ${pct}%). נסה שוב מאותה זווית.`;
+      hint.classList.add('bad'); hint.textContent = r.m <= 70 ? 'חשוך מדי. כוון לשמיים (או לחלון) עם אור.' : 'לא נראה כמו שמיים. כוון את המצלמה למעלה, לכיוון השמיים.';
       shutter.classList.remove('shake'); void shutter.offsetWidth; shutter.classList.add('shake');
       if (fails >= 3) alt.hidden = false;
     });
   });
 }
 
-export const RUNNERS = { math: mathTask, pushups: pushupsTask, mantra: mantraTask, brush: brushTask };
+export const RUNNERS = { math: mathTask, pushups: pushupsTask, mantra: mantraTask, brush: brushTask, bed: bedTask, sky: skyTask };
 export const TASK_INFO = {
   math: { name: 'חשבון', desc: 'שלושה תרגילים קצרים', em: '🧮' },
   pushups: { name: 'שכיבות סמיכה', desc: 'המצלמה סופרת אותך', em: '💪' },
   mantra: { name: 'מודה אני בקול', desc: 'להגיד בקול רם, 3 שניות', em: '📣' },
   brush: { name: 'צילום המברשת', desc: 'להראות למצלמה את המברשת', em: '🪥' },
+  bed: { name: 'סידור המיטה', desc: 'לצלם מיטה מסודרת', em: '🛏️' },
+  sky: { name: 'צילום שמיים', desc: 'לפתוח תריס ולצלם את השמיים', em: '🌤️' },
 };

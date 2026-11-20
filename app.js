@@ -2,6 +2,7 @@
 import { $, el, icon, toast, haptic, pad2, fmtRel } from './js/ui.js';
 import { loadStore, saveStore, todayStr, computeStreak, nextAlarm, TASK_ORDER } from './js/store.js';
 import { RUNNERS, TASK_INFO, openCamera, stopStream, grabSquare, thumbOf, cameraErrorText } from './js/tasks.js';
+import { SOUNDS, soundById } from './js/sounds.js';
 import { signature } from './js/brush-logic.js';
 import { loadPose } from './js/vision.js';
 import { profile, setName, setPhotoFromFile, clearPhoto, makeIcon, applyIcon, avatarNode, confetti, showSplash } from './js/profile.js';
@@ -172,11 +173,11 @@ let editing = null, draft = null;
 const SNOOZES = [[0, 'ללא'], [5, '5 דקות'], [10, '10 דקות']];
 function openEditor(a) {
   editing = a || null;
-  draft = a ? { ...a, days: [...a.days], tasks: [...a.tasks] } : { time: '06:30', days: [], label: '', tasks: ['math'], reps: 10, snooze: 0, level: 2, enabled: true };
+  draft = a ? { ...a, days: [...a.days], tasks: [...a.tasks] } : { time: '06:30', days: [], label: '', tasks: ['math'], reps: 10, snooze: 0, level: 2, sound: 'beep', enabled: true };
   $('editTitle').textContent = a ? 'עריכת שעון' : 'שעון חדש';
   $('fTime').value = draft.time; $('fLabel').value = draft.label;
   $('fDelete').hidden = !a; $('taskErr').hidden = true;
-  renderEditorDays(); renderEditorTasks(); renderEditorSnooze();
+  renderEditorDays(); renderEditorTasks(); renderEditorSound(); renderEditorSnooze();
   openScreen('editor');
 }
 function renderEditorDays() {
@@ -214,11 +215,22 @@ function renderEditorTasks() {
       }
       tx.append(row);
     }
-    if (on && t === 'brush') {
-      tx.append(el('div', { class: 'sub' }, store.brushRef ? el('span', { class: 'ok' }, 'תמונת ייחוס קיימת') : el('span', { class: 'bad' }, 'חסרה תמונת ייחוס'),
-        el('button', { type: 'button', class: 'link', onclick: (e) => { e.preventDefault(); e.stopPropagation(); openRefCam(); } }, store.brushRef ? 'צלם מחדש' : 'צלם עכשיו')));
+    if (on && (t === 'brush' || t === 'bed')) {
+      const rk = t === 'bed' ? 'bedRef' : 'brushRef';
+      tx.append(el('div', { class: 'sub' }, store[rk] ? el('span', { class: 'ok' }, 'תמונת ייחוס קיימת') : el('span', { class: 'bad' }, 'חסרה תמונת ייחוס'),
+        el('button', { type: 'button', class: 'link', onclick: (e) => { e.preventDefault(); e.stopPropagation(); openRefCam(rk); } }, store[rk] ? 'צלם מחדש' : 'צלם עכשיו')));
     }
     box.append(el('label', { class: 'opt' + (on ? ' on' : ''), 'data-t': t }, c, el('span', { class: 'em' }, TASK_INFO[t].em), tx, el('span', { class: 'mark' }, on ? icon('check', 14) : '')));
+  }
+}
+let previewAc = null;
+function renderEditorSound() {
+  const box = $('fSound'); box.textContent = '';
+  for (const s of SOUNDS) {
+    const on = (draft.sound || 'beep') === s.id;
+    const play = el('button', { type: 'button', class: 'lvl', 'aria-label': 'האזנה ל' + s.name, onclick: (e) => { e.preventDefault(); e.stopPropagation(); previewAc ||= audio.ensure(); previewAc.resume?.(); s.play(previewAc); } }, '▶');
+    const pick = el('button', { type: 'button', class: 'lvl snd' + (on ? ' on' : ''), 'aria-pressed': String(on), onclick: (e) => { e.preventDefault(); draft.sound = s.id; haptic(6); renderEditorSound(); } }, s.name);
+    box.append(el('div', { class: 'sndrow' }, pick, play));
   }
 }
 function renderEditorSnooze() {
@@ -233,6 +245,7 @@ $('fTime').addEventListener('change', () => { draft.time = $('fTime').value; });
 $('editSave').addEventListener('click', () => {
   draft.time = $('fTime').value || draft.time; draft.label = $('fLabel').value.trim();
   if (!draft.tasks.length) { $('taskErr').hidden = false; $('taskErr').scrollIntoView({ block: 'center' }); haptic(40); return; }
+  if (draft.tasks.includes('bed') && !store.bedRef) { toast('צריך לצלם תמונת ייחוס של מיטה מסודרת לפני השמירה.', { kind: 'err' }); return; }
   if (draft.tasks.includes('brush') && !store.brushRef) { toast('צריך לצלם תמונת ייחוס למברשת לפני השמירה.', { kind: 'err' }); return; }
   if (editing) Object.assign(editing, draft); else store.alarms.push({ id: crypto.randomUUID().slice(0, 8), ...draft });
   save(); renderAll(); syncAlarms(); haptic(15);
@@ -257,8 +270,12 @@ function preloadVision() {
 // ---------- תמונת ייחוס למברשת ----------
 let refStream = null;
 closers.refcam = () => { stopStream(refStream); refStream = null; };
-function openRefCam() {
+let refKey = 'brushRef';
+function openRefCam(key = 'brushRef') {
+  refKey = key;
   openScreen('refcam', async () => {
+    $('refTitle').textContent = key === 'bedRef' ? 'צילום ייחוס למיטה' : 'צילום ייחוס למברשת';
+    $('refNote').textContent = key === 'bedRef' ? 'סדר את המיטה וצלם אותה מהמקום שבו תצלם בבוקר, בזווית קבועה.' : 'צלם את המברשת במקום שבו תצלם אותה בבוקר, בזווית וברקע קבועים.';
     const shot = $('refShot'), badge = $('refBadge');
     shot.textContent = ''; shot.append(icon('camera'), 'צלם'); shot.disabled = true;
     badge.hidden = false; badge.className = 'cam-badge'; badge.textContent = ''; badge.append(el('span', { class: 'spin' }), 'פותח מצלמה...');
@@ -269,7 +286,7 @@ function openRefCam() {
 $('refShot').addEventListener('click', () => {
   const v = $('refVideo'); if (!v.videoWidth) return;
   const { img } = grabSquare(v);
-  store.brushRef = { sig: signature(img), thumb: thumbOf(v), at: Date.now() }; save(); haptic(30);
+  store[refKey] = { sig: signature(img), thumb: thumbOf(v), at: Date.now() }; save(); haptic(30);
   goBack(); setTimeout(() => { toast('נשמרה תמונת ייחוס'); if (!$('editor').hidden) renderEditorTasks(); renderAll(); }, 250);
 });
 
@@ -316,19 +333,14 @@ const audio = {
   ensure() { actx ||= new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume().catch(() => {}); return actx; },
   mute(m) { muted = m; },
 };
+let curSound = soundById('beep');
 function beep() {
   if (muted || !actx || actx.state !== 'running') return;
-  const o = actx.createOscillator(), g = actx.createGain();
-  o.type = 'square'; o.frequency.value = 880;
-  g.gain.setValueAtTime(0.0001, actx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.35, actx.currentTime + 0.02);
-  g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.28);
-  o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.3);
-  haptic(200);
+  curSound.play(actx); haptic(200);
 }
 function startSound() {
   try { audio.ensure(); } catch { /* */ }
-  stopSound(); muted = false; beepTimer = setInterval(beep, 600);
+  stopSound(); muted = false; curSound = soundById(ringState?.alarm?.sound); beep(); beepTimer = setInterval(beep, curSound.every);
   setTimeout(() => { $('ringSound').hidden = !(actx && actx.state !== 'running') || $('ring').hidden; }, 300);
 }
 function stopSound() { clearInterval(beepTimer); beepTimer = null; }

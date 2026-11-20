@@ -1,14 +1,14 @@
 // אחסון מקומי, מיגרציה והיסטוריה.
 export const todayStr = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const LEGACY = { math: ['math'], mantra: ['mantra'], both: ['math', 'mantra'] };
-export const TASK_ORDER = ['math', 'pushups', 'mantra', 'brush'];
+export const TASK_ORDER = ['math', 'pushups', 'mantra', 'brush', 'bed', 'sky'];
 
 export function migrate(s) {
   s.alarms ||= []; s.history ||= {}; s.localFired ||= {};
   for (const a of s.alarms) {
     if (!a.tasks) a.tasks = LEGACY[a.task] || ['math'];
     delete a.task;
-    a.reps ||= 10; a.snooze ||= 0; a.level ||= 2;
+    a.reps ||= 10; a.snooze ||= 0; a.level ||= 2; a.sound ||= 'beep';
   }
   return s;
 }

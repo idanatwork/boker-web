@@ -85,6 +85,11 @@
         <p id="taskErr" class="note bad" hidden>בחר לפחות משימה אחת.</p>
       </fieldset>
       <fieldset>
+        <legend>צליל</legend>
+        <div id="fSound" class="snds"></div>
+        <p class="note">הצליל מתנגן כשהאפליקציה פתוחה. בהתראה כשהיא סגורה, אייפון משמיע את צליל ההתראה הרגיל.</p>
+      </fieldset>
+      <fieldset>
         <legend>נודניק</legend>
         <div id="fSnooze" class="seg" role="radiogroup"></div>
         <p class="note">הנודניק משהה את הצלצול ולא מכבה אותו. עד 3 פעמים.</p>
@@ -120,7 +125,7 @@
 <section id="refcam" class="screen" hidden role="dialog" aria-modal="true" aria-labelledby="refTitle">
   <header class="bar"><button class="back" data-back></button><h2 id="refTitle">צילום ייחוס</h2><span class="bar-spacer"></span></header>
   <main class="content">
-    <p class="note">צלם את המברשת במקום שבו תצלם אותה בבוקר, בזווית וברקע קבועים.</p>
+    <p class="note" id="refNote">צלם את המברשת במקום שבו תצלם אותה בבוקר, בזווית וברקע קבועים.</p>
     <div class="cam"><video id="refVideo" class="cam-video back" playsinline muted></video><div id="refBadge" class="cam-badge" hidden></div></div>
     <button id="refShot" class="primary big" disabled></button>
   </main>
