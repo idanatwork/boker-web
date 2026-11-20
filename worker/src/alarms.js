@@ -43,3 +43,18 @@ export function pushText(alarm, count) {
   if (count < 5) return { title: 'השעון עדיין מצלצל', body: 'פתח את האפליקציה וסיים את המשימה' };
   return { title: 'עדיין לא כיבית!', body: 'השעון לא ישתוק עד שתסיים את המשימה' };
 }
+
+// שעת שינה: התראה אחת חצי שעה לפני ואחת בשעה עצמה, פעם אחת ביום לכל אחת (סובל עיכוב Cron של עד דקה).
+export function dueBedtime(bt, fired, now, tz) {
+  if (!bt || !bt.enabled || !/^\d\d:\d\d$/.test(bt.time)) return [];
+  const lp = localParts(now, tz), t = toMin(bt.time), out = [];
+  const hit = (target) => { const d = (lp.minutes - target + 1440) % 1440; return d <= 1; };
+  if (bt.pre !== false && hit((t - 30 + 1440) % 1440) && fired?.bt_pre !== lp.date) out.push({ kind: 'pre', date: lp.date });
+  if (hit(t) && fired?.bt_main !== lp.date) out.push({ kind: 'main', date: lp.date });
+  return out;
+}
+export function bedtimeText(kind) {
+  return kind === 'pre'
+    ? { title: 'עוד חצי שעה ללכת לישון', body: 'זמן להתחיל להתכונן: שיניים, פיג׳מה וסיפור' }
+    : { title: 'זמן ללכת לישון', body: 'לילה טוב, גיבור. הולכים למיטה' };
+}

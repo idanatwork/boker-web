@@ -1,5 +1,5 @@
 import { sendPush } from './webpush.js';
-import { dueAlarm, escalation, pushText } from './alarms.js';
+import { dueAlarm, escalation, pushText, dueBedtime, bedtimeText } from './alarms.js';
 
 const json = (data, status = 200, extra = {}) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', ...extra } });
@@ -78,6 +78,8 @@ async function handle(req, env) {
         snooze: [0, 5, 10].includes(Number(x.snooze)) ? Number(x.snooze) : 0, enabled: !!x.enabled,
       };
     });
+    if (b.bedtime && /^\d\d:\d\d$/.test(String(b.bedtime.time))) dev.bedtime = { enabled: !!b.bedtime.enabled, time: String(b.bedtime.time), pre: b.bedtime.pre !== false };
+    else if (b.bedtime === null) dev.bedtime = null;
     if (b.tz) dev.tz = String(b.tz);
     await putJson(env, `dev:${id}`, dev);
     return json({ ok: true });
@@ -149,6 +151,12 @@ export async function tick(env, now = Date.now()) {
           changed = true;
           results.push({ id: id.slice(0, 6), status: r.status });
         }
+      }
+      for (const d of dueBedtime(dev.bedtime, ring.fired, now, dev.tz || 'Asia/Jerusalem')) {
+        ring.fired = { ...ring.fired, [d.kind === 'pre' ? 'bt_pre' : 'bt_main']: d.date };
+        changed = true;
+        const r = await push(env, dev, id, { ...bedtimeText(d.kind), tag: 'bedtime-' + d.kind }, 'bedtime');
+        results.push({ id: id.slice(0, 6), bedtime: d.kind, status: r.status });
       }
       if (changed) await putJson(env, `ring:${id}`, ring, { expirationTtl: 60 * 60 * 24 * 14 });
       } catch (e) { results.push({ id: id.slice(0, 6), error: String(e?.message || e) }); }

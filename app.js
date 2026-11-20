@@ -27,7 +27,7 @@ async function api(method, path, body) {
 let syncFailed = false;
 async function syncAlarms() {
   if (!apiReady() || !store.registered) return;
-  try { await api('PUT', '/api/alarms', { alarms: store.alarms, tz: TZ }); syncFailed = false; } catch { syncFailed = true; toast('הסנכרון עם השרת נכשל. השעונים נשמרו במכשיר.', { kind: 'err' }); }
+  try { await api('PUT', '/api/alarms', { alarms: store.alarms, tz: TZ, bedtime: store.bedtime || null }); syncFailed = false; } catch { syncFailed = true; toast('הסנכרון עם השרת נכשל. השעונים נשמרו במכשיר.', { kind: 'err' }); }
 }
 
 // ---------- ניווט ----------
@@ -298,6 +298,17 @@ function renderSettings() {
   else if (!apiReady()) n.append(el('p', { class: 'note' }, 'השרת עדיין לא מחובר.'));
   else if (notifActive()) n.append(el('p', { class: 'ok' }, 'פעילות'), el('div', { style: 'margin-top:12px' }, btn('ghost sm', 'שלח התראת בדיקה', testPush, busy.test, 'bell')));
   else n.append(el('p', { class: 'note' }, 'כבויות. השעון יצלצל רק כשהאפליקציה פתוחה.'), el('div', { style: 'margin-top:12px' }, btn('primary sm', 'הפעל התראות', registerPush, busy.push)));
+  const bt = $('setBed'); bt.textContent = '';
+  const cur = store.bedtime || { enabled: false, time: '21:00', pre: true };
+  const en = el('input', { type: 'checkbox' }); en.checked = !!cur.enabled;
+  const tm = el('input', { type: 'time', value: cur.time, 'aria-label': 'שעת שינה' });
+  const pre = el('input', { type: 'checkbox' }); pre.checked = cur.pre !== false;
+  const saveBt = () => { store.bedtime = { enabled: en.checked, time: tm.value || '21:00', pre: pre.checked }; save(); syncAlarms(); haptic(8); };
+  en.addEventListener('change', () => { saveBt(); if (en.checked && !notifActive()) toast('כדי לקבל את ההתראה צריך להפעיל התראות למעלה.', { kind: 'err', ms: 5000 }); });
+  tm.addEventListener('change', saveBt); pre.addEventListener('change', saveBt);
+  bt.append(el('label', { class: 'opt-row' }, en, ' תזכורת שעת שינה'), el('div', { class: 'rowflex', style: 'margin-top:10px' }, el('span', {}, 'שעה:'), tm),
+    el('label', { class: 'opt-row', style: 'margin-top:10px' }, pre, ' גם התראה חצי שעה לפני'),
+    el('p', { class: 'note', style: 'margin-top:8px' }, 'ההתראה נשלחת מהשרת, כמו השעון. עובדת רק כשההתראות פעילות. ב-iOS Focus יכול להשתיק.'));
   const b = $('setBrush'); b.textContent = '';
   b.append(el('div', { class: 'rowflex' }, store.brushRef ? el('img', { class: 'thumb', src: store.brushRef.thumb, alt: 'תמונת הייחוס' }) : null,
     el('div', {}, el('p', { class: store.brushRef ? 'ok' : 'note' }, store.brushRef ? 'נשמרה תמונת ייחוס' : 'עוד לא צולמה תמונה.'),
