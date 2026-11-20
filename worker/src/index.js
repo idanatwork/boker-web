@@ -124,6 +124,7 @@ export async function tick(env, now = Date.now()) {
     const page = await env.KV.list({ prefix: 'dev:', cursor });
     for (const k of page.keys) {
       const id = k.name.slice(4);
+      try {
       const dev = await getJson(env, k.name);
       if (!dev?.sub) continue;
       const ring = (await getJson(env, `ring:${id}`)) || { fired: {}, active: null };
@@ -150,6 +151,7 @@ export async function tick(env, now = Date.now()) {
         }
       }
       if (changed) await putJson(env, `ring:${id}`, ring, { expirationTtl: 60 * 60 * 24 * 14 });
+      } catch (e) { results.push({ id: id.slice(0, 6), error: String(e?.message || e) }); }
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
@@ -169,6 +171,9 @@ export default {
     }
   },
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(tick(env));
+    ctx.waitUntil((async () => {
+      const r = await tick(env);
+      await env.KV.put('meta:lastTick', JSON.stringify({ at: Date.now(), results: r }), { expirationTtl: 3600 });
+    })());
   },
 };

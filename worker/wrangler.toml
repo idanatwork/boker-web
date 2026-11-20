@@ -8,7 +8,7 @@ crons = ["* * * * *"]
 
 [[kv_namespaces]]
 binding = "KV"
-id = "REPLACE_WITH_KV_ID"
+id = "076686f3c2e64a858c555692a1db1f62"
 
 [vars]
 ALLOWED_ORIGIN = "https://idanatwork.github.io"
