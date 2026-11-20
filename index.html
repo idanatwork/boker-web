@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#fafaf7">
+<meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121413" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -15,58 +17,114 @@
 <title>בוקר-ווב</title>
 </head>
 <body>
-<main id="home">
-  <header class="top"><h1>בוקר-ווב</h1><button id="nightBtn" class="ghost">מצב לילה</button></header>
 
-  <section id="setup" class="card" hidden></section>
+<section id="home" class="screen">
+  <header class="bar home-bar">
+    <h1>בוקר-ווב</h1>
+    <div class="bar-end">
+      <button id="nightBtn" class="icon-btn" aria-label="מצב לילה" title="מצב לילה"></button>
+      <button id="settingsBtn" class="icon-btn" aria-label="הגדרות" title="הגדרות"></button>
+    </div>
+  </header>
+  <main class="content">
+    <div id="hero" class="hero"></div>
+    <section id="setup" class="card" hidden></section>
+    <section class="block">
+      <div class="block-head"><h2>שעונים</h2><button id="addBtn" class="primary sm"></button></div>
+      <ul id="alarmList" class="list" aria-label="רשימת שעונים"></ul>
+      <div id="empty" class="empty" hidden>
+        <p class="empty-t">עוד אין שעונים</p>
+        <p class="note">צור שעון, בחר משימה, והוא לא ישתוק עד שתסיים אותה.</p>
+      </div>
+    </section>
+    <section class="block">
+      <div class="block-head"><h2>רצף</h2></div>
+      <div class="card streak">
+        <div class="week" id="week" aria-label="שבעת הימים האחרונים"></div>
+        <div class="stats">
+          <div><b id="streakNow">0</b><span>ימים ברצף</span></div>
+          <div><b id="streakBest">0</b><span>שיא</span></div>
+          <div><b id="avgTime">-</b><span>כיבוי ממוצע</span></div>
+        </div>
+      </div>
+    </section>
+    <footer class="foot"><span id="ver"></span></footer>
+  </main>
+</section>
 
-  <section class="card">
-    <div class="row"><h2>שעונים</h2><button id="addBtn" class="primary">שעון חדש</button></div>
-    <ul id="alarmList" class="list"></ul>
-    <p id="emptyMsg" class="note">אין שעונים עדיין.</p>
-  </section>
+<section id="editor" class="screen" hidden role="dialog" aria-modal="true" aria-labelledby="editTitle">
+  <header class="bar">
+    <button class="back" data-back></button>
+    <h2 id="editTitle">שעון חדש</h2>
+    <button id="editSave" class="primary sm">שמור</button>
+  </header>
+  <main class="content">
+    <form id="editForm" novalidate>
+      <div class="timebox"><input type="time" id="fTime" required value="06:30" aria-label="שעה"></div>
+      <fieldset>
+        <legend>ימים</legend>
+        <div id="fDays" class="chips" role="group"></div>
+        <div class="presets">
+          <button type="button" class="link" data-preset="all">כל יום</button>
+          <button type="button" class="link" data-preset="work">ימי חול</button>
+          <button type="button" class="link" data-preset="weekend">סוף שבוע</button>
+        </div>
+      </fieldset>
+      <label class="field">תווית<input type="text" id="fLabel" maxlength="40" placeholder="לא חובה" autocomplete="off"></label>
+      <fieldset>
+        <legend>משימות לכיבוי</legend>
+        <div id="fTasks" class="opts"></div>
+        <p id="taskErr" class="note bad" hidden>בחר לפחות משימה אחת.</p>
+      </fieldset>
+      <fieldset>
+        <legend>נודניק</legend>
+        <div id="fSnooze" class="seg" role="radiogroup"></div>
+        <p class="note">הנודניק משהה את הצלצול ולא מכבה אותו. עד 3 פעמים.</p>
+      </fieldset>
+      <button type="button" id="fDelete" class="danger-link" hidden>מחק שעון</button>
+    </form>
+  </main>
+</section>
 
-  <section class="card" id="statsCard">
-    <h2>רצף</h2>
-    <div class="stats"><div><b id="streakNow">0</b><span>ימים ברצף</span></div><div><b id="streakBest">0</b><span>שיא</span></div><div><b id="avgTime">-</b><span>זמן כיבוי ממוצע</span></div></div>
-  </section>
+<section id="settings" class="screen" hidden role="dialog" aria-modal="true" aria-labelledby="setTitle">
+  <header class="bar"><button class="back" data-back></button><h2 id="setTitle">הגדרות</h2><span class="bar-spacer"></span></header>
+  <main class="content">
+    <section class="block"><div class="block-head"><h2>התראות</h2></div><div id="setNotif" class="card"></div></section>
+    <section class="block"><div class="block-head"><h2>תמונת ייחוס למברשת</h2></div><div id="setBrush" class="card"></div></section>
+    <section class="block"><div class="block-head"><h2>נסה משימה</h2></div>
+      <div class="card"><p class="note">מסך צלצול לדוגמה, בלי להשפיע על הרצף.</p><div id="setTry" class="try"></div></div></section>
+    <section class="block"><div class="block-head"><h2>מידע</h2></div><div class="card" id="setInfo"></div></section>
+    <button id="resetBtn" class="danger-link">מחק את כל הנתונים במכשיר</button>
+  </main>
+</section>
 
-  <footer class="foot"><span id="ver"></span> · <a href="#" id="testRing">בדיקת מסך צלצול</a></footer>
-</main>
+<section id="refcam" class="screen" hidden role="dialog" aria-modal="true" aria-labelledby="refTitle">
+  <header class="bar"><button class="back" data-back></button><h2 id="refTitle">צילום ייחוס</h2><span class="bar-spacer"></span></header>
+  <main class="content">
+    <p class="note">צלם את המברשת במקום שבו תצלם אותה בבוקר, בזווית וברקע קבועים.</p>
+    <div class="cam"><video id="refVideo" class="cam-video back" playsinline muted></video><div id="refBadge" class="cam-badge" hidden></div></div>
+    <button id="refShot" class="primary big" disabled></button>
+  </main>
+</section>
 
-<div id="editor" class="sheet" hidden>
-  <form id="editForm" class="card">
-    <div class="navbar"><button type="button" class="back" id="editBack">‹ חזרה</button><h2 id="editTitle">שעון חדש</h2></div>
-    <label>שעה <input type="time" id="fTime" required value="06:30"></label>
-    <fieldset><legend>ימים</legend><div id="fDays" class="chips"></div></fieldset>
-    <label>תווית <input type="text" id="fLabel" maxlength="40" placeholder="אופציונלי"></label>
-    <label>משימה
-      <select id="fTask">
-        <option value="math">חשבון</option>
-        <option value="mantra">מודה אני בקול</option>
-        <option value="both">שניהם</option>
-      </select>
-    </label>
-    <div class="row"><button type="button" id="fCancel" class="ghost">ביטול</button><button type="button" id="fDelete" class="ghost danger" hidden>מחק</button><button class="primary" type="submit">שמור</button></div>
-  </form>
-</div>
-
-<div id="ring" class="ring" hidden>
-  <button id="ringBack" class="back ring-back">‹ חזרה</button>
-  <div class="ring-inner">
-    <div id="ringClock" class="ring-clock"></div>
+<section id="ring" class="screen ring" hidden role="dialog" aria-modal="true" aria-label="השעון מצלצל">
+  <header class="bar ring-bar"><button id="ringBack" class="back" aria-label="חזרה"></button><span id="ringStep" class="ring-step"></span><button id="snoozeBtn" class="ghost sm" hidden>נודניק</button></header>
+  <main class="content ring-inner">
+    <div class="pulse"><div id="ringClock" class="ring-clock" aria-live="off"></div></div>
     <div id="ringLabel" class="ring-label"></div>
-    <button id="ringSound" class="primary big" hidden>הקש להפעלת צליל</button>
-    <div id="task"></div>
-  </div>
-</div>
+    <button id="ringSound" class="ghost" hidden>הקש להפעלת צליל</button>
+    <div id="task" class="task"></div>
+  </main>
+</section>
 
-<div id="night" class="night" hidden>
-  <button id="nightBack" class="back night-back">‹ חזרה</button>
+<section id="night" class="night" hidden role="dialog" aria-modal="true" aria-label="מצב לילה">
+  <button id="nightBack" class="back night-back"></button>
   <div id="nightClock" class="night-clock"></div>
   <div id="nightNext" class="night-next"></div>
-  <div class="night-hint">השאר את האפליקציה פתוחה והטלפון על המטען. הקש כדי לצאת.</div>
-</div>
+  <div class="night-hint">השאר את האפליקציה פתוחה והטלפון על המטען. המסך נשאר דלוק.</div>
+</section>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="config.js"></script>
 <script src="app.js" type="module"></script>

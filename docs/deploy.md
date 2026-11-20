@@ -20,7 +20,7 @@ npx wrangler deploy
 ## בדיקות
 ```
 cd worker
-node test/webpush.test.mjs            # הצפנה, VAPID ותזמון
+node test/webpush.test.mjs            # הצפנה, VAPID, תזמון ונודניק
 npx wrangler dev --test-scheduled     # בטרמינל אחד
 node test/e2e.mjs                     # בטרמינל שני: מקצה לקצה מול שירות פוש מזויף
 ```
@@ -32,3 +32,8 @@ node test/e2e.mjs                     # בטרמינל שני: מקצה לקצה
 3. "הפעל התראות", מאשרים, ואז "שלח התראת בדיקה".
 4. יוצרים שעון לעוד 2 דקות, נועלים את המסך, ומחכים.
 5. לוחצים על ההתראה, פותרים את המשימה, ובודקים שהפוש נפסק.
+
+## בדיקות לקוח
+```
+node test/logic.test.mjs   # ספירת שכיבות סמיכה והשוואת תמונת מברשת
+```

@@ -2,5 +2,5 @@
 window.BW_CONFIG = {
   API_BASE: '',
   VAPID_PUBLIC: 'BEpmfh7rXUOVGCW-IZhblhdzwzjkRusdPywpR7z01ZD1WckoMvOKn5g6l2qkOQjrnx0tbhEsBg03r5pn-9lswwU',
-  VERSION: 'v1.1',
+  VERSION: 'v2',
 };

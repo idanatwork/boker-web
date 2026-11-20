@@ -53,3 +53,12 @@ assert.equal(escalation(act, t0 + 25 * 60000).due, true);
 assert.equal(escalation({ ...act, lastPushAt: t0 + 25 * 60000 }, t0 + 27 * 60000).due, false);
 assert.equal(escalation(act, t0 + 121 * 60000).stop, true);
 console.log('all worker tests passed');
+
+// נודניק
+{
+  const a = { startedAt: t0, lastPushAt: t0, opened: true, pausedUntil: t0 + 5 * 60000, snoozes: 1 };
+  assert.equal(escalation(a, t0 + 2 * 60000).due, false, 'paused');
+  assert.equal(escalation(a, t0 + 6 * 60000).due, true, 'resumes after snooze');
+  assert.equal(escalation({ ...a, lastPushAt: t0 + 6 * 60000 }, t0 + 6.5 * 60000).due, false);
+  console.log('snooze tests passed');
+}

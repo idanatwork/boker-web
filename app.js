@@ -1,210 +1,293 @@
-// בוקר-ווב: לקוח PWA. ללא תלויות חיצוניות.
+// בוקר-ווב: לקוח PWA.
+import { $, el, icon, toast, haptic, pad2, fmtRel } from './js/ui.js';
+import { loadStore, saveStore, todayStr, computeStreak, nextAlarm, TASK_ORDER } from './js/store.js';
+import { RUNNERS, TASK_INFO, openCamera, stopStream, grabSquare, thumbOf, cameraErrorText } from './js/tasks.js';
+import { signature } from './js/brush-logic.js';
+import { loadPose } from './js/vision.js';
+
 const CFG = window.BW_CONFIG;
-const $ = (id) => document.getElementById(id);
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Jerusalem';
 const DAYS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
-const TASKS = { math: 'חשבון', mantra: 'מודה אני בקול', both: 'חשבון ומודה אני' };
-const pad2 = (n) => String(n).padStart(2, '0');
-const todayStr = (d = new Date()) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-
-// ---------- אחסון ----------
-const load = () => { try { return JSON.parse(localStorage.getItem('bw') || '{}'); } catch { return {}; } };
-const store = load();
-store.alarms ||= [];
-store.history ||= {};
-store.localFired ||= {};
-const save = () => localStorage.setItem('bw', JSON.stringify(store));
-if (!store.deviceId) {
-  store.deviceId = crypto.randomUUID();
-  store.token = crypto.randomUUID() + crypto.randomUUID();
-  save();
-}
+const store = loadStore();
+const save = () => saveStore(store);
+save();
 
 // ---------- API ----------
 const apiReady = () => !!CFG.API_BASE;
 async function api(method, path, body) {
-  const res = await fetch(`${CFG.API_BASE}${path}${path.includes('?') ? '&' : '?'}id=${store.deviceId}`, {
-    method,
-    headers: { Authorization: `Bearer ${store.token}`, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
+  const res = await fetch(`${CFG.API_BASE}${path}?id=${store.deviceId}`, {
+    method, headers: { Authorization: `Bearer ${store.token}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(`${path} ${res.status}`);
-  return res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { const e = new Error(path + ' ' + res.status); e.status = res.status; e.data = data; throw e; }
+  return data;
 }
+let syncFailed = false;
 async function syncAlarms() {
   if (!apiReady() || !store.registered) return;
-  try { await api('PUT', '/api/alarms', { alarms: store.alarms, tz: TZ }); setStatus('', ''); } catch (e) { setStatus('סנכרון נכשל, ינסה שוב', 'bad'); }
+  try { await api('PUT', '/api/alarms', { alarms: store.alarms, tz: TZ }); syncFailed = false; } catch { syncFailed = true; toast('הסנכרון עם השרת נכשל. השעונים נשמרו במכשיר.', { kind: 'err' }); }
 }
+
+// ---------- ניווט ----------
+const stack = [];
+const closers = {};
+function openScreen(name, init) {
+  const s = $(name);
+  s.hidden = false; s.classList.remove('enter'); void s.offsetWidth; s.classList.add('enter');
+  stack.push(name);
+  history.pushState({ d: stack.length }, '');
+  s.scrollTop = 0;
+  init?.();
+}
+function hideScreen(name) { $(name).hidden = true; closers[name]?.(); }
+window.addEventListener('popstate', (e) => {
+  const target = e.state?.d || 0;
+  while (stack.length > target) hideScreen(stack.pop());
+});
+history.replaceState({ d: 0 }, '');
+const goBack = () => { if (stack.length) history.back(); };
+document.querySelectorAll('[data-back]').forEach((b) => { b.append(icon('chevron', 20), 'חזרה'); b.addEventListener('click', goBack); });
+$('nightBack').append(icon('chevron', 20), 'חזרה');
+$('ringBack').append(icon('chevron', 20), 'חזרה');
+$('nightBtn').append(icon('moon'));
+$('settingsBtn').append(icon('gear'));
+$('addBtn').append(icon('plus', 18), 'שעון חדש');
 
 // ---------- התקנה והתראות ----------
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 let swReg = null;
-let statusMsg = ['', ''];
-function setStatus(t, cls) { statusMsg = [t, cls]; renderSetup(); }
+let busy = { push: false, test: false };
 
-function b64uToBytes(s) {
-  const p = s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4);
-  return Uint8Array.from(atob(p), (c) => c.charCodeAt(0));
-}
+const b64uToBytes = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
 
 async function registerPush() {
-  setStatus('מבקש אישור...', '');
-  const perm = await Notification.requestPermission();
-  if (perm !== 'granted') { setStatus('ההתראות נחסמו. אפשר לאשר בהגדרות המכשיר.', 'bad'); return; }
-  swReg = swReg || (await navigator.serviceWorker.ready);
-  let sub = await swReg.pushManager.getSubscription();
-  if (!sub) sub = await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(CFG.VAPID_PUBLIC) });
-  const res = await fetch(`${CFG.API_BASE}/api/register`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: store.deviceId, token: store.token, sub: sub.toJSON(), tz: TZ }),
-  });
-  if (!res.ok) { setStatus('ההרשמה לשרת נכשלה (' + res.status + ')', 'bad'); return; }
-  store.registered = true; store.endpoint = sub.endpoint; save();
-  await syncAlarms();
-  setStatus('', '');
+  busy.push = true; renderAll();
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { toast('ההתראות נחסמו. אפשר לאשר בהגדרות המכשיר.', { kind: 'err', ms: 5000 }); return; }
+    swReg = swReg || (await navigator.serviceWorker.ready);
+    let sub = await swReg.pushManager.getSubscription();
+    if (!sub) sub = await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(CFG.VAPID_PUBLIC) });
+    const res = await fetch(`${CFG.API_BASE}/api/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: store.deviceId, token: store.token, sub: sub.toJSON(), tz: TZ }) });
+    if (!res.ok) { toast(`ההרשמה לשרת נכשלה (${res.status})`, { kind: 'err' }); return; }
+    store.registered = true; store.endpoint = sub.endpoint; save();
+    await syncAlarms();
+    toast('ההתראות פעילות');
+  } catch (e) { toast('לא הצלחתי להפעיל התראות: ' + (e.message || e), { kind: 'err', ms: 6000 }); }
+  finally { busy.push = false; renderAll(); }
 }
-
+async function testPush() {
+  busy.test = true; renderAll();
+  try { const r = await api('POST', '/api/test-push'); if (r.ok) { store.testedPush = true; save(); toast('נשלחה בדיקה. היא אמורה להגיע תוך שניות.'); } else toast('שירות הפוש דחה את ההודעה (' + r.status + ')', { kind: 'err' }); }
+  catch (e) { toast(e.status === 409 ? 'אין מנוי פעיל. הפעל התראות מחדש.' : 'השליחה נכשלה: ' + e.message, { kind: 'err' }); }
+  finally { busy.test = false; renderAll(); }
+}
 async function refreshSubscription() {
   if (!pushSupported || !apiReady() || !store.registered || Notification.permission !== 'granted') return;
   try {
     swReg = swReg || (await navigator.serviceWorker.ready);
     const sub = await swReg.pushManager.getSubscription();
     if (sub && sub.endpoint !== store.endpoint) await registerPush();
-    else if (!sub) { store.registered = false; save(); renderSetup(); }
-  } catch (e) { /* שקט */ }
+    else if (!sub) { store.registered = false; save(); renderAll(); }
+  } catch { /* שקט */ }
+}
+const notifActive = () => store.registered && pushSupported && Notification.permission === 'granted';
+
+function btn(cls, text, onclick, loading, ic) {
+  const b = el('button', { class: cls, onclick, disabled: !!loading }, loading ? el('span', { class: 'spin' }) : ic ? icon(ic, 18) : null, text);
+  return b;
 }
 
 function renderSetup() {
-  const el = $('setup');
-  const parts = [];
-  let show = true;
-  if (isIOS && !standalone) {
-    parts.push('<h2>התקנה לפני הכול</h2><p class="note">באייפון התראות עובדות רק מאפליקציה שהותקנה למסך הבית.</p><ol class="steps"><li>הקש על כפתור השיתוף בתחתית Safari</li><li>בחר "הוסף למסך הבית"</li><li>פתח את בוקר-ווב מהאייקון החדש</li></ol>');
-  } else if (!pushSupported) {
-    parts.push('<h2>התראות</h2><p class="note bad">הדפדפן הזה לא תומך בהתראות Push. אפשר להשתמש במצב לילה בלבד.</p>');
-  } else if (!apiReady()) {
-    parts.push('<h2>התראות</h2><p class="note">השרת עדיין לא מחובר. מצב לילה עובד.</p>');
-  } else if (store.registered && Notification.permission === 'granted') {
-    parts.push('<h2>התראות</h2><p class="note ok">פעילות. השרת ישלח התראה בשעה של כל שעון.</p><button id="testPush">שלח התראת בדיקה</button>');
-  } else {
-    parts.push('<h2>התראות</h2><p class="note">כדי שהשעון יצלצל כשהאפליקציה סגורה צריך לאשר התראות.</p><button id="enablePush" class="primary">הפעל התראות</button>');
+  const box = $('setup');
+  const steps = [];
+  if (isIOS) steps.push({ done: standalone, t: 'התקן למסך הבית', d: 'באייפון התראות עובדות רק מאפליקציה מותקנת. שיתוף, "הוסף למסך הבית", ופתיחה מהאייקון.' });
+  if (pushSupported && apiReady() && (!isIOS || standalone)) steps.push({ done: notifActive(), t: 'הפעל התראות', d: 'כדי שהשעון יצלצל כשהאפליקציה סגורה.', act: () => btn('primary sm', 'הפעל', registerPush, busy.push) });
+  steps.push({ done: store.alarms.length > 0, t: 'צור שעון ראשון', d: 'בחר שעה ומשימה.' });
+  if (notifActive()) steps.push({ done: !!store.testedPush, t: 'שלח התראת בדיקה', d: 'ודא שהיא מגיעה גם כשהמסך נעול.', act: () => btn('ghost sm', 'שלח', testPush, busy.test) });
+  const allDone = steps.every((s) => s.done);
+  box.hidden = allDone && (notifActive() || !apiReady() || !pushSupported);
+  if (box.hidden) return;
+  box.textContent = '';
+  box.append(el('h2', {}, 'כמעט מוכן'));
+  const ul = el('ul', { class: 'steps' });
+  for (const s of steps) {
+    ul.append(el('li', { class: s.done ? 'done' : '' }, el('span', { class: 'dot' }, s.done ? icon('check', 14) : ''), el('div', { class: 't' }, s.t, el('span', { class: 'd', text: s.done ? '' : s.d })), !s.done && s.act ? s.act() : null));
   }
-  if (statusMsg[0]) parts.push(`<p class="note ${statusMsg[1]}">${statusMsg[0]}</p>`);
-  el.innerHTML = parts.join('');
-  el.hidden = !show;
-  $('enablePush')?.addEventListener('click', () => registerPush().catch((e) => setStatus('שגיאה: ' + e.message, 'bad')));
-  $('testPush')?.addEventListener('click', async () => {
-    try { const r = await api('POST', '/api/test-push'); setStatus(r.ok ? 'נשלחה בדיקה. אמורה להגיע תוך שניות.' : 'הפוש נדחה (' + r.status + ')', r.ok ? 'ok' : 'bad'); }
-    catch (e) { setStatus('שליחה נכשלה: ' + e.message, 'bad'); }
-  });
+  box.append(ul);
+  if (!apiReady()) box.append(el('p', { class: 'note' }, 'השרת עדיין לא מחובר. מצב לילה והצלצול מתוך האפליקציה עובדים.'));
+  else if (!pushSupported && !isIOS) box.append(el('p', { class: 'note bad' }, 'הדפדפן הזה לא תומך בהתראות. אפשר להשתמש במצב לילה.'));
 }
 
-// ---------- שעונים ----------
-function daysLabel(a) { return !a.days?.length || a.days.length === 7 ? 'כל יום' : a.days.slice().sort().map((d) => DAYS[d]).join(' '); }
+// ---------- בית ----------
+const daysLabel = (a) => (!a.days?.length || a.days.length === 7 ? 'כל יום' : a.days.slice().sort().map((d) => DAYS[d]).join(' '));
+const tasksLabel = (a) => a.tasks.map((t) => TASK_INFO[t].name).join(', ');
+
+function renderHero() {
+  const h = $('hero'); h.textContent = '';
+  const n = nextAlarm(store.alarms);
+  if (!n) { h.append(el('div', { class: 'hero-l' }, 'אין שעון פעיל'), el('div', { class: 'hero-t', style: 'opacity:.25' }, '--:--')); return; }
+  h.append(el('div', { class: 'hero-l' }, 'השעון הבא'), el('div', { class: 'hero-t' }, n.alarm.time), el('div', { class: 'hero-r' }, fmtRel(n.date - new Date())));
+}
 function renderAlarms() {
-  const ul = $('alarmList');
-  ul.textContent = '';
+  const ul = $('alarmList'); ul.textContent = '';
   const sorted = [...store.alarms].sort((x, y) => x.time.localeCompare(y.time));
   for (const a of sorted) {
-    const li = document.createElement('li');
-    const main = document.createElement('div');
-    main.className = 'a-main';
-    const t = document.createElement('div'); t.className = 'a-time'; t.textContent = a.time;
-    const m = document.createElement('div'); m.className = 'a-meta';
-    m.textContent = [daysLabel(a), TASKS[a.task] || '', a.label].filter(Boolean).join(' · ');
-    main.append(t, m);
-    main.addEventListener('click', () => openEditor(a));
-    const sw = document.createElement('label'); sw.className = 'sw';
-    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = a.enabled;
-    cb.addEventListener('change', () => { a.enabled = cb.checked; save(); syncAlarms(); });
-    sw.append(cb, document.createElement('i'));
-    li.append(main, sw);
-    ul.append(li);
+    const cb = el('input', { type: 'checkbox', 'aria-label': `שעון ${a.time}`, ...(a.enabled ? { checked: '' } : {}) });
+    cb.checked = a.enabled;
+    cb.addEventListener('change', () => { a.enabled = cb.checked; save(); haptic(10); renderAll(); syncAlarms(); if (a.enabled) { const n = nextAlarm([a]); if (n) toast(`השעון יצלצל ${fmtRel(n.date - new Date())}`); } });
+    ul.append(el('li', { class: a.enabled ? '' : 'off' },
+      el('button', { class: 'a-main', onclick: () => openEditor(a), 'aria-label': `ערוך שעון ${a.time}` }, el('span', { class: 'a-time' }, a.time), el('span', { class: 'a-meta' }, [daysLabel(a), tasksLabel(a), a.label].filter(Boolean).join(' · '))),
+      el('label', { class: 'sw' }, cb, el('i'))));
   }
-  $('emptyMsg').hidden = store.alarms.length > 0;
-}
-
-let editing = null;
-function openEditor(a) {
-  editing = a || null;
-  $('editTitle').textContent = a ? 'עריכת שעון' : 'שעון חדש';
-  $('fTime').value = a?.time || '06:30';
-  $('fLabel').value = a?.label || '';
-  $('fTask').value = a?.task || 'math';
-  const sel = a?.days?.length ? a.days : [0, 1, 2, 3, 4, 5, 6];
-  const box = $('fDays');
-  box.textContent = '';
-  DAYS.forEach((d, i) => {
-    const l = document.createElement('label');
-    const c = document.createElement('input'); c.type = 'checkbox'; c.value = i; c.checked = sel.includes(i);
-    const s = document.createElement('span'); s.textContent = d;
-    l.append(c, s); box.append(l);
-  });
-  $('fDelete').hidden = !a;
-  $('editor').hidden = false;
-}
-$('addBtn').addEventListener('click', () => openEditor(null));
-$('fCancel').addEventListener('click', () => { $('editor').hidden = true; });
-$('editBack').addEventListener('click', () => { $('editor').hidden = true; });
-$('fDelete').addEventListener('click', () => {
-  store.alarms = store.alarms.filter((x) => x !== editing); save(); renderAlarms(); syncAlarms(); $('editor').hidden = true;
-});
-$('editForm').addEventListener('submit', (e) => {
-  e.preventDefault();
-  let days = [...$('fDays').querySelectorAll('input:checked')].map((c) => Number(c.value));
-  if (days.length === 7) days = [];
-  const data = { time: $('fTime').value, days, label: $('fLabel').value.trim(), task: $('fTask').value, enabled: true };
-  if (editing) Object.assign(editing, data);
-  else store.alarms.push({ id: crypto.randomUUID().slice(0, 8), ...data });
-  save(); renderAlarms(); syncAlarms(); $('editor').hidden = true;
-  if (!editing && pushSupported && apiReady() && !store.registered) setStatus('כדי שהשעון יצלצל ברקע, הפעל התראות.', '');
-});
-
-// ---------- סטטיסטיקות ורצף ----------
-function computeStreak() {
-  const h = store.history;
-  const dates = Object.keys(h).filter((k) => h[k].success).sort();
-  if (!dates.length) return { now: 0, best: 0 };
-  const first = dates[0];
-  const ok = (d) => !!h[todayStr(d)]?.success;
-  // רצף נוכחי: אחורה מהיום (או מאתמול), עד 2 ימי מנוחה בכל חלון של 7 ימים
-  const walk = (start) => {
-    let streak = 0; const misses = [];
-    for (let i = 0; i < 400; i++) {
-      const d = new Date(start); d.setDate(d.getDate() - i);
-      if (todayStr(d) < first) break;
-      if (ok(d)) { streak++; misses.push(0); } else {
-        misses.push(1);
-        if (misses.slice(-7).reduce((a, b) => a + b, 0) > 2) { return streak; }
-      }
-    }
-    return streak;
-  };
-  const t = new Date();
-  const now = walk(ok(t) ? t : new Date(t.getFullYear(), t.getMonth(), t.getDate() - 1));
-  let best = 0, run = 0, miss = [];
-  const start = new Date(first + 'T12:00:00');
-  for (let d = new Date(start); todayStr(d) <= todayStr(t); d.setDate(d.getDate() + 1)) {
-    if (ok(d)) { run++; miss.push(0); best = Math.max(best, run); } else { miss.push(1); if (miss.slice(-7).reduce((a, b) => a + b, 0) > 2) { run = 0; miss = []; } }
-  }
-  return { now, best };
+  $('empty').hidden = store.alarms.length > 0;
+  ul.hidden = store.alarms.length === 0;
 }
 function renderStats() {
-  const s = computeStreak();
+  const s = computeStreak(store.history);
   $('streakNow').textContent = s.now; $('streakBest').textContent = s.best;
   const times = Object.values(store.history).filter((x) => x.success && x.secs).map((x) => x.secs);
   $('avgTime').textContent = times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) + ' שנ׳' : '-';
+  const w = $('week'); w.textContent = '';
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const on = !!store.history[todayStr(d)]?.success;
+    w.append(el('div', { class: 'wd' + (on ? ' on' : '') + (i === 0 ? ' today' : ''), 'aria-label': `${DAYS[d.getDay()]}: ${on ? 'הושלם' : 'לא הושלם'}` }, el('i', {}, on ? icon('check', 14) : ''), DAYS[d.getDay()]));
+  }
 }
+function renderAll() { renderHero(); renderSetup(); renderAlarms(); renderStats(); if (!$('settings').hidden) renderSettings(); }
+setInterval(() => { if (!$('home').hidden) renderHero(); }, 30000);
+
+// ---------- עורך שעון ----------
+let editing = null, draft = null;
+const SNOOZES = [[0, 'ללא'], [5, '5 דקות'], [10, '10 דקות']];
+function openEditor(a) {
+  editing = a || null;
+  draft = a ? { ...a, days: [...a.days], tasks: [...a.tasks] } : { time: '06:30', days: [], label: '', tasks: ['math'], reps: 10, snooze: 0, enabled: true };
+  $('editTitle').textContent = a ? 'עריכת שעון' : 'שעון חדש';
+  $('fTime').value = draft.time; $('fLabel').value = draft.label;
+  $('fDelete').hidden = !a; $('taskErr').hidden = true;
+  renderEditorDays(); renderEditorTasks(); renderEditorSnooze();
+  openScreen('editor');
+}
+function renderEditorDays() {
+  const box = $('fDays'); box.textContent = '';
+  const sel = draft.days.length ? draft.days : [0, 1, 2, 3, 4, 5, 6];
+  DAYS.forEach((d, i) => {
+    const c = el('input', { type: 'checkbox', value: i, 'aria-label': `יום ${d}` }); c.checked = sel.includes(i);
+    c.addEventListener('change', () => { draft.days = [...box.querySelectorAll('input:checked')].map((x) => Number(x.value)); if (draft.days.length === 7) draft.days = []; haptic(6); });
+    box.append(el('label', {}, c, el('span', {}, d)));
+  });
+}
+document.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => {
+  draft.days = b.dataset.preset === 'all' ? [] : b.dataset.preset === 'work' ? [0, 1, 2, 3, 4] : [5, 6]; renderEditorDays();
+}));
+function renderEditorTasks() {
+  const box = $('fTasks'); box.textContent = '';
+  for (const t of TASK_ORDER) {
+    const on = draft.tasks.includes(t);
+    const c = el('input', { type: 'checkbox' }); c.checked = on;
+    c.addEventListener('change', () => {
+      draft.tasks = TASK_ORDER.filter((x) => (x === t ? c.checked : draft.tasks.includes(x)));
+      $('taskErr').hidden = draft.tasks.length > 0; haptic(6); renderEditorTasks();
+      if (t === 'pushups' && c.checked) preloadVision();
+    });
+    const tx = el('div', { class: 'tx' }, el('b', {}, TASK_INFO[t].name), el('span', {}, TASK_INFO[t].desc));
+    if (on && t === 'pushups') {
+      const out = el('output', {}, String(draft.reps));
+      const mk = (d, l) => el('button', { type: 'button', 'aria-label': l, onclick: (e) => { e.preventDefault(); e.stopPropagation(); draft.reps = Math.min(50, Math.max(1, draft.reps + d)); out.textContent = draft.reps; } }, d > 0 ? '+' : '−');
+      tx.append(el('div', { class: 'sub', onclick: (e) => { e.preventDefault(); e.stopPropagation(); } }, 'חזרות:', el('div', { class: 'stepper' }, mk(-1, 'פחות'), out, mk(1, 'יותר'))));
+    }
+    if (on && t === 'brush') {
+      tx.append(el('div', { class: 'sub' }, store.brushRef ? el('span', { class: 'ok' }, 'תמונת ייחוס קיימת') : el('span', { class: 'bad' }, 'חסרה תמונת ייחוס'),
+        el('button', { type: 'button', class: 'link', onclick: (e) => { e.preventDefault(); e.stopPropagation(); openRefCam(); } }, store.brushRef ? 'צלם מחדש' : 'צלם עכשיו')));
+    }
+    box.append(el('label', { class: 'opt' + (on ? ' on' : '') }, c, el('span', { class: 'mark' }, on ? icon('check', 14) : ''), tx));
+  }
+}
+function renderEditorSnooze() {
+  const box = $('fSnooze'); box.textContent = '';
+  for (const [v, l] of SNOOZES) {
+    const r = el('input', { type: 'radio', name: 'snz', value: v }); r.checked = draft.snooze === v;
+    r.addEventListener('change', () => { draft.snooze = v; haptic(6); });
+    box.append(el('label', {}, r, el('span', {}, l)));
+  }
+}
+$('fTime').addEventListener('change', () => { draft.time = $('fTime').value; });
+$('editSave').addEventListener('click', () => {
+  draft.time = $('fTime').value || draft.time; draft.label = $('fLabel').value.trim();
+  if (!draft.tasks.length) { $('taskErr').hidden = false; $('taskErr').scrollIntoView({ block: 'center' }); haptic(40); return; }
+  if (draft.tasks.includes('brush') && !store.brushRef) { toast('צריך לצלם תמונת ייחוס למברשת לפני השמירה.', { kind: 'err' }); return; }
+  if (editing) Object.assign(editing, draft); else store.alarms.push({ id: crypto.randomUUID().slice(0, 8), ...draft });
+  save(); renderAll(); syncAlarms(); haptic(15);
+  const n = nextAlarm([editing || store.alarms.at(-1)]);
+  goBack();
+  setTimeout(() => toast(n ? `השעון יצלצל ${fmtRel(n.date - new Date())}` : 'נשמר'), 250);
+});
+$('fDelete').addEventListener('click', () => {
+  const removed = editing, idx = store.alarms.indexOf(editing);
+  store.alarms.splice(idx, 1); save(); renderAll(); syncAlarms(); goBack();
+  setTimeout(() => toast('השעון נמחק', { action: 'ביטול', ms: 6000, onAction: () => { store.alarms.splice(idx, 0, removed); save(); renderAll(); syncAlarms(); } }), 250);
+});
+$('addBtn').addEventListener('click', () => openEditor(null));
+let visionWarm = false;
+function preloadVision() {
+  if (visionWarm) return;
+  visionWarm = true;
+  toast('מוריד ברקע את מודל הזיהוי לשכיבות סמיכה (כ-15MB, פעם אחת)', { ms: 5000 });
+  loadPose().then(() => { store.visionCached = true; save(); toast('מודל הזיהוי מוכן גם לשימוש בלי רשת'); }).catch(() => { visionWarm = false; });
+}
+
+// ---------- תמונת ייחוס למברשת ----------
+let refStream = null;
+closers.refcam = () => { stopStream(refStream); refStream = null; };
+function openRefCam() {
+  openScreen('refcam', async () => {
+    const shot = $('refShot'), badge = $('refBadge');
+    shot.textContent = ''; shot.append(icon('camera'), 'צלם'); shot.disabled = true;
+    badge.hidden = false; badge.className = 'cam-badge'; badge.textContent = ''; badge.append(el('span', { class: 'spin' }), 'פותח מצלמה...');
+    try { refStream = await openCamera($('refVideo'), 'environment'); badge.hidden = true; shot.disabled = false; }
+    catch (e) { badge.className = 'cam-badge err'; badge.textContent = cameraErrorText(e); }
+  });
+}
+$('refShot').addEventListener('click', () => {
+  const v = $('refVideo'); if (!v.videoWidth) return;
+  const { img } = grabSquare(v);
+  store.brushRef = { sig: signature(img), thumb: thumbOf(v), at: Date.now() }; save(); haptic(30);
+  goBack(); setTimeout(() => { toast('נשמרה תמונת ייחוס'); if (!$('editor').hidden) renderEditorTasks(); renderAll(); }, 250);
+});
+
+// ---------- הגדרות ----------
+function renderSettings() {
+  const n = $('setNotif'); n.textContent = '';
+  if (isIOS && !standalone) n.append(el('p', { class: 'note' }, 'פתח את האפליקציה מהאייקון במסך הבית כדי להפעיל התראות.'));
+  else if (!pushSupported) n.append(el('p', { class: 'note bad' }, 'הדפדפן הזה לא תומך בהתראות.'));
+  else if (!apiReady()) n.append(el('p', { class: 'note' }, 'השרת עדיין לא מחובר.'));
+  else if (notifActive()) n.append(el('p', { class: 'ok' }, 'פעילות'), el('div', { style: 'margin-top:12px' }, btn('ghost sm', 'שלח התראת בדיקה', testPush, busy.test, 'bell')));
+  else n.append(el('p', { class: 'note' }, 'כבויות. השעון יצלצל רק כשהאפליקציה פתוחה.'), el('div', { style: 'margin-top:12px' }, btn('primary sm', 'הפעל התראות', registerPush, busy.push)));
+  const b = $('setBrush'); b.textContent = '';
+  b.append(el('div', { class: 'rowflex' }, store.brushRef ? el('img', { class: 'thumb', src: store.brushRef.thumb, alt: 'תמונת הייחוס' }) : null,
+    el('div', {}, el('p', { class: store.brushRef ? 'ok' : 'note' }, store.brushRef ? 'נשמרה תמונת ייחוס' : 'עוד לא צולמה תמונה.'),
+      el('div', { style: 'margin-top:8px' }, btn('ghost sm', store.brushRef ? 'צלם מחדש' : 'צלם עכשיו', openRefCam, false, 'camera')))));
+  const t = $('setTry'); t.textContent = '';
+  for (const k of TASK_ORDER) t.append(el('button', { onclick: () => { goBack(); setTimeout(() => startRing('demo', { demo: true, tasks: [k] }), 280); } }, TASK_INFO[k].name));
+  const i = $('setInfo'); i.textContent = '';
+  for (const [k, v] of [['גרסה', CFG.VERSION], ['אזור זמן', TZ], ['מכשיר', store.deviceId.slice(0, 8)], ['שרת', apiReady() ? 'מחובר' : 'לא מחובר'], ['מותקן', standalone ? 'כן' : 'לא']]) i.append(el('div', { class: 'kv' }, el('span', {}, k), el('span', { dir: 'auto' }, v)));
+}
+$('settingsBtn').addEventListener('click', () => openScreen('settings', renderSettings));
+$('resetBtn').addEventListener('click', () => {
+  if (!confirm('למחוק את כל השעונים וההיסטוריה במכשיר הזה?')) return;
+  localStorage.removeItem('bw'); location.replace(location.pathname);
+});
 
 // ---------- צליל ----------
 let actx = null, beepTimer = null, muted = false;
-function ensureAudio() {
-  actx ||= new (window.AudioContext || window.webkitAudioContext)();
-  if (actx.state === 'suspended') actx.resume().catch(() => {});
-  return actx;
-}
+const audio = {
+  ensure() { actx ||= new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume().catch(() => {}); return actx; },
+  mute(m) { muted = m; },
+};
 function beep() {
   if (muted || !actx || actx.state !== 'running') return;
   const o = actx.createOscillator(), g = actx.createGain();
@@ -213,175 +296,119 @@ function beep() {
   g.gain.exponentialRampToValueAtTime(0.35, actx.currentTime + 0.02);
   g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.28);
   o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.3);
-  if (navigator.vibrate && navigator.userActivation?.hasBeenActive) navigator.vibrate(200);
+  haptic(200);
 }
 function startSound() {
-  try { ensureAudio(); } catch { /* ללא צליל */ }
-  stopSound();
-  muted = false;
-  beepTimer = setInterval(beep, 600);
-  setTimeout(() => { $('ringSound').hidden = !(actx && actx.state !== 'running'); }, 300);
+  try { audio.ensure(); } catch { /* */ }
+  stopSound(); muted = false; beepTimer = setInterval(beep, 600);
+  setTimeout(() => { $('ringSound').hidden = !(actx && actx.state !== 'running') || $('ring').hidden; }, 300);
 }
 function stopSound() { clearInterval(beepTimer); beepTimer = null; }
 document.addEventListener('pointerdown', () => { if (actx && actx.state === 'suspended') actx.resume().catch(() => {}); $('ringSound').hidden = !(actx && actx.state !== 'running') || $('ring').hidden; });
-$('ringSound').addEventListener('click', () => { ensureAudio(); $('ringSound').hidden = true; });
+$('ringSound').addEventListener('click', () => { audio.ensure(); $('ringSound').hidden = true; });
 
-// ---------- מסך צלצול ומשימות ----------
-let ringState = null;
-let clockTimer = null;
-function tickRingClock() { const d = new Date(); $('ringClock').textContent = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
+// ---------- צלצול ----------
+let ringState = null, clockTimer = null, snoozeTimer = null;
+const tickRingClock = () => { const d = new Date(); $('ringClock').textContent = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
 
-function startRing(alarmId, { demo = false } = {}) {
+function startRing(alarmId, { demo = false, tasks = null } = {}) {
   if (ringState) return;
-  const alarm = store.alarms.find((a) => a.id === alarmId) || { id: alarmId, task: 'math', label: '' };
-  ringState = { alarm, startedAt: Date.now(), demo, cleanup: [] };
+  const saved = store.alarms.find((a) => a.id === alarmId);
+  const alarm = demo ? { id: 'demo', label: 'בדיקה', tasks: tasks || ['math'], reps: Math.min(3, saved?.reps || 3), snooze: 5 } : saved || { id: alarmId, label: '', tasks: ['math'], reps: 10, snooze: 0 };
+  ringState = { alarm, startedAt: Date.now(), demo, cleanup: [], stepIdx: 0, snoozes: 0 };
   $('ringLabel').textContent = alarm.label || '';
-  $('ring').hidden = false;
+  $('ring').classList.remove('calm');
+  $('ring').hidden = false; $('ring').classList.remove('enter'); void $('ring').offsetWidth; $('ring').classList.add('enter');
   tickRingClock(); clockTimer = setInterval(tickRingClock, 1000);
   startSound();
+  $('snoozeBtn').hidden = !(alarm.snooze > 0);
   if (!demo && apiReady() && store.registered) api('POST', '/api/opened').catch(() => {});
-  const seq = alarm.task === 'mantra' ? ['mantra'] : alarm.task === 'both' ? ['math', 'mantra'] : ['math'];
-  runTasks(seq);
+  runStep();
 }
-
-async function runTasks(seq) {
-  for (const t of seq) { if (t === 'math') await mathTask(); else await mantraTask(); }
-  finishRing();
+async function runStep() {
+  const rs = ringState; if (!rs) return;
+  const tasks = rs.alarm.tasks;
+  if (rs.stepIdx >= tasks.length) return finishRing();
+  const t = tasks[rs.stepIdx];
+  $('ringStep').textContent = tasks.length > 1 ? `משימה ${rs.stepIdx + 1} מתוך ${tasks.length}` : '';
+  const ctx = { alarm: rs.alarm, store, audio, cleanup: (f) => rs.cleanup.push(f), announce: () => {} };
+  await RUNNERS[t]($('task'), ctx);
+  if (ringState !== rs || rs.paused) return;
+  rs.cleanup.splice(0).forEach((f) => { try { f(); } catch { /* */ } });
+  rs.stepIdx++;
+  runStep();
 }
-
-function mathTask() {
-  return new Promise((resolve) => {
-    const total = 3; let n = 0, ans = '', q;
-    const box = $('task');
-    const gen = () => {
-      const k = n % 3;
-      if (k === 0) { const a = 20 + Math.floor(Math.random() * 70), b = 11 + Math.floor(Math.random() * 60); return { t: `${a} + ${b}`, r: a + b }; }
-      if (k === 1) { const a = 60 + Math.floor(Math.random() * 40), b = 11 + Math.floor(Math.random() * 45); return { t: `${a} - ${b}`, r: a - b }; }
-      const a = 6 + Math.floor(Math.random() * 7), b = 6 + Math.floor(Math.random() * 7); return { t: `${a} × ${b}`, r: a * b };
-    };
-    box.innerHTML = '<div class="note" id="mProg"></div><div class="q" id="mQ"></div><div class="ans" id="mA"></div><div class="pad" id="mPad"></div>';
-    const pad = $('mPad');
-    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', '✓'];
-    for (const k of keys) { const b = document.createElement('button'); b.textContent = k; b.addEventListener('click', () => press(k)); pad.append(b); }
-    const show = () => { q = gen(); $('mProg').textContent = `תרגיל ${n + 1} מתוך ${total}`; $('mQ').textContent = q.t; ans = ''; $('mA').textContent = ''; };
-    const press = (k) => {
-      if (k === '⌫') ans = ans.slice(0, -1);
-      else if (k === '✓') {
-        if (Number(ans) === q.r && ans !== '') { n++; if (n >= total) { box.textContent = ''; resolve(); return; } show(); return; }
-        $('mA').classList.remove('shake'); void $('mA').offsetWidth; $('mA').classList.add('shake'); ans = '';
-      } else if (ans.length < 4) ans += k;
-      $('mA').textContent = ans;
-    };
-    show();
-  });
-}
-
-function mantraTask() {
-  return new Promise((resolve) => {
-    const box = $('task');
-    const NEED = 4; // שניות של קול חזק מצטבר
-    box.innerHTML = '<div class="mantra">מוֹדֶה אֲנִי לְפָנֶיךָ מֶלֶךְ חַי וְקַיָּם, שֶׁהֶחֱזַרְתָּ בִּי נִשְׁמָתִי בְּחֶמְלָה, רַבָּה אֱמוּנָתֶךָ.</div><div class="prog"><i id="mBar"></i></div><div class="note" id="mHint">אמור בקול רם. הצליל יושתק כשתתחיל.</div><button id="mStart" class="primary big">התחל</button><button id="mSkip" class="ghost" hidden>הקלט לא עובד, עבור לחשבון</button>';
-    $('mStart').addEventListener('click', async () => {
-      $('mStart').disabled = true;
-      let stream;
-      try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false } }); }
-      catch { $('mHint').textContent = 'אין גישה למיקרופון.'; $('mSkip').hidden = false; return; }
-      muted = true;
-      const ctx = ensureAudio();
-      const src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(); an.fftSize = 1024; src.connect(an);
-      const buf = new Float32Array(an.fftSize);
-      let loud = 0, last = performance.now(), base = null, baseN = 0, cancelled = false;
-      ringState?.cleanup.push(() => { cancelled = true; stream.getTracks().forEach((t) => t.stop()); });
-      $('mStart').hidden = true; $('mHint').textContent = 'מקשיב... אמור בקול רם';
-      const loop = () => {
-        if (cancelled) return;
-        an.getFloatTimeDomainData(buf);
-        let s = 0; for (const v of buf) s += v * v;
-        const rms = Math.sqrt(s / buf.length);
-        const now = performance.now(), dt = (now - last) / 1000; last = now;
-        if (baseN < 15) { base = (base ?? 0) + rms; baseN++; if (baseN === 15) base /= 15; }
-        else {
-          const thr = Math.max(0.06, base * 3);
-          if (rms > thr) loud += dt;
-          $('mBar').style.width = Math.min(100, (loud / NEED) * 100) + '%';
-          if (loud >= NEED) { stream.getTracks().forEach((t) => t.stop()); src.disconnect(); muted = false; box.textContent = ''; resolve(); return; }
-        }
-        requestAnimationFrame(loop);
-      };
-      loop();
-    });
-    $('mSkip').addEventListener('click', async () => { muted = false; await mathTask(); resolve(); });
-  });
-}
-
+function runCleanups() { ringState?.cleanup.splice(0).forEach((f) => { try { f(); } catch { /* */ } }); }
 function closeRing() {
-  ringState?.cleanup.forEach((f) => { try { f(); } catch { /* */ } });
-  stopSound(); clearInterval(clockTimer); muted = false;
+  runCleanups(); stopSound(); clearInterval(clockTimer); clearTimeout(snoozeTimer); muted = false;
   $('ring').hidden = true; $('task').textContent = ''; $('ringSound').hidden = true; ringState = null;
-  history.replaceState(null, '', location.pathname);
+  history.replaceState(history.state, '', location.pathname);
 }
 $('ringBack').addEventListener('click', () => {
   if (ringState && !ringState.demo && !ringState.done && !confirm('לצאת מהמסך? השעון לא יכובה וימשיך להתריע עד שתסיים את המשימה.')) return;
   closeRing();
 });
+$('snoozeBtn').addEventListener('click', async () => {
+  const rs = ringState; if (!rs || rs.done) return;
+  const mins = rs.alarm.snooze;
+  if (rs.snoozes >= 3) { toast('אין עוד נודניקים לצלצול הזה.'); return; }
+  if (!rs.demo && apiReady() && store.registered) { try { await api('POST', '/api/snooze'); } catch (e) { if (e.status === 409) { toast('אין עוד נודניקים לצלצול הזה.'); return; } } }
+  rs.snoozes++; rs.paused = true; runCleanups(); stopSound();
+  const until = Date.now() + mins * 60000;
+  $('ring').classList.add('calm'); $('snoozeBtn').hidden = true;
+  const left = el('div', { class: 'big-t' }); const box = $('task'); box.textContent = '';
+  box.append(el('div', { class: 'snoozed' }, el('p', { class: 'task-title' }, 'נודניק'), left, el('p', { class: 'note' }, `השעון יחזור בעוד ${mins} דקות. נשארו ${3 - rs.snoozes} נודניקים.`), el('button', { class: 'primary big', style: 'margin-top:24px', onclick: resume }, 'אני ער, בוא נתחיל')));
+  const upd = () => { const s = Math.max(0, Math.round((until - Date.now()) / 1000)); left.textContent = `${pad2(Math.floor(s / 60))}:${pad2(s % 60)}`; };
+  upd(); const iv = setInterval(upd, 1000);
+  snoozeTimer = setTimeout(resume, mins * 60000);
+  function resume() { clearInterval(iv); clearTimeout(snoozeTimer); if (ringState !== rs) return; rs.paused = false; $('ring').classList.remove('calm'); $('snoozeBtn').hidden = !(rs.alarm.snooze > 0 && rs.snoozes < 3); startSound(); runStep(); }
+});
 
 function finishRing() {
-  const { alarm, startedAt, demo } = ringState;
-  ringState.done = true;
-  const secs = Math.round((Date.now() - startedAt) / 1000);
-  stopSound(); clearInterval(clockTimer);
-  if (!demo) {
-    store.history[todayStr()] = { success: true, secs };
-    save();
+  const rs = ringState; rs.done = true;
+  const secs = Math.round((Date.now() - rs.startedAt) / 1000) - 0;
+  stopSound(); clearInterval(clockTimer); $('ring').classList.add('calm'); $('snoozeBtn').hidden = true; $('ringStep').textContent = '';
+  if (!rs.demo) {
+    store.history[todayStr()] = { success: true, secs }; save();
     if (apiReady() && store.registered) api('POST', '/api/dismiss').catch(() => {});
   }
-  renderStats();
-  const s = computeStreak();
-  $('task').innerHTML = `<h2>בוקר טוב</h2><p class="note">כובה אחרי ${secs} שניות. ${demo ? 'זו הייתה בדיקה.' : 'רצף: ' + s.now + ' ימים.'}</p><button id="ringClose" class="primary big">סגור</button>`;
-  $('ringLabel').textContent = '';
-  $('ringClose').addEventListener('click', closeRing);
+  renderAll();
+  const s = computeStreak(store.history);
+  $('task').textContent = ''; $('ringLabel').textContent = '';
+  $('task').append(el('div', { class: 'done' }, el('div', { class: 'check' }, icon('check', 44)), el('h2', {}, 'בוקר טוב'),
+    el('p', { class: 'note' }, rs.demo ? 'זו הייתה בדיקה, הרצף לא הושפע.' : `כובה אחרי ${secs} שניות. רצף של ${s.now} ${s.now === 1 ? 'יום' : 'ימים'}.`),
+    el('button', { class: 'primary big', style: 'margin-top:24px', onclick: closeRing }, 'סגור')));
+  haptic(60);
 }
 
 // ---------- מצב לילה ושעון מקומי ----------
-let wakeLock = null;
-async function lockScreen() { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { wakeLock = null; } }
+let wakeLock = null, nightTimer = null;
+const lockScreen = async () => { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { wakeLock = null; } };
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !$('night').hidden) lockScreen(); });
-let nightTimer = null;
-function nextAlarmText() {
-  const now = new Date(); let best = null;
-  for (const a of store.alarms.filter((x) => x.enabled)) {
-    const [h, m] = a.time.split(':').map(Number);
-    for (let i = 0; i < 8; i++) {
-      const d = new Date(now); d.setDate(d.getDate() + i); d.setHours(h, m, 0, 0);
-      const days = a.days?.length ? a.days : [0, 1, 2, 3, 4, 5, 6];
-      if (d > now && days.includes(d.getDay())) { if (!best || d < best.d) best = { d, a }; break; }
-    }
-  }
-  return best ? `השעון הבא: ${best.a.time}` : 'אין שעון פעיל';
+closers.night = () => { clearInterval(nightTimer); wakeLock?.release().catch(() => {}); wakeLock = null; };
+function renderNight() {
+  const d = new Date(); $('nightClock').textContent = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  const n = nextAlarm(store.alarms); $('nightNext').textContent = n ? `השעון הבא: ${n.alarm.time}` : 'אין שעון פעיל';
 }
-function renderNight() { const d = new Date(); $('nightClock').textContent = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; $('nightNext').textContent = nextAlarmText(); }
-$('nightBtn').addEventListener('click', async () => { ensureAudio(); $('night').hidden = false; renderNight(); nightTimer = setInterval(renderNight, 5000); await lockScreen(); });
-const exitNight = () => { $('night').hidden = true; clearInterval(nightTimer); wakeLock?.release().catch(() => {}); wakeLock = null; };
-$('night').addEventListener('click', exitNight);
-$('nightBack').addEventListener('click', (e) => { e.stopPropagation(); exitNight(); });
+$('nightBtn').addEventListener('click', () => { audio.ensure(); openScreen('night', () => { renderNight(); nightTimer = setInterval(renderNight, 5000); lockScreen(); }); });
+$('nightBack').addEventListener('click', goBack);
 
-function localCheck() {
+setInterval(() => {
   if (ringState) return;
   const now = new Date(), date = todayStr(now), hm = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
   for (const a of store.alarms) {
     if (!a.enabled || a.time !== hm) continue;
     const days = a.days?.length ? a.days : [0, 1, 2, 3, 4, 5, 6];
     if (!days.includes(now.getDay()) || store.localFired[a.id] === date) continue;
-    store.localFired[a.id] = date; save(); startRing(a.id); return;
+    store.localFired[a.id] = date; save();
+    while (stack.length) hideScreen(stack.pop());
+    startRing(a.id); return;
   }
-}
-setInterval(localCheck, 1000);
+}, 1000);
 
 // ---------- אתחול ----------
-$('ver').textContent = CFG.VERSION;
-$('testRing').addEventListener('click', (e) => { e.preventDefault(); startRing('demo', { demo: true }); });
-renderSetup(); renderAlarms(); renderStats();
-
+$('ver').textContent = 'בוקר-ווב ' + CFG.VERSION;
+renderAll();
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').then((r) => { swReg = r; refreshSubscription(); }).catch(() => {});
   navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.type === 'ring') startRing(e.data.alarmId); });

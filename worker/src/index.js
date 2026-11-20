@@ -67,10 +67,17 @@ async function handle(req, env) {
   if (req.method === 'PUT' && path === '/api/alarms') {
     const b = await req.json();
     if (!Array.isArray(b.alarms) || b.alarms.length > 20) return json({ error: 'bad request' }, 400);
-    dev.alarms = b.alarms.map((x) => ({
-      id: String(x.id).slice(0, 40), time: String(x.time), days: Array.isArray(x.days) ? x.days.filter((d) => d >= 0 && d <= 6) : [],
-      label: String(x.label || '').slice(0, 40), task: String(x.task || 'math'), enabled: !!x.enabled,
-    }));
+    const TASKS = ['math', 'pushups', 'mantra', 'brush'];
+    const legacy = { math: ['math'], mantra: ['mantra'], both: ['math', 'mantra'] };
+    dev.alarms = b.alarms.map((x) => {
+      let tasks = Array.isArray(x.tasks) ? x.tasks.filter((t) => TASKS.includes(t)) : legacy[x.task] || [];
+      if (!tasks.length) tasks = ['math'];
+      return {
+        id: String(x.id).slice(0, 40), time: String(x.time), days: Array.isArray(x.days) ? x.days.filter((d) => d >= 0 && d <= 6) : [],
+        label: String(x.label || '').slice(0, 40), tasks, reps: Math.min(50, Math.max(1, Number(x.reps) || 10)),
+        snooze: [0, 5, 10].includes(Number(x.snooze)) ? Number(x.snooze) : 0, enabled: !!x.enabled,
+      };
+    });
     if (b.tz) dev.tz = String(b.tz);
     await putJson(env, `dev:${id}`, dev);
     return json({ ok: true });
@@ -83,6 +90,17 @@ async function handle(req, env) {
     const ring = await getJson(env, `ring:${id}`);
     if (ring?.active) { ring.active.opened = true; await putJson(env, `ring:${id}`, ring); }
     return json({ ok: true, active: !!ring?.active });
+  }
+  if (req.method === 'POST' && path === '/api/snooze') {
+    const ring = await getJson(env, `ring:${id}`);
+    if (!ring?.active) return json({ ok: true, active: false });
+    const alarm = (dev.alarms || []).find((x) => x.id === ring.active.alarmId);
+    const mins = alarm?.snooze || 0;
+    if (!mins || (ring.active.snoozes || 0) >= 3) return json({ ok: false, error: 'snooze not allowed' }, 409);
+    ring.active.snoozes = (ring.active.snoozes || 0) + 1;
+    ring.active.pausedUntil = Date.now() + mins * 60000;
+    await putJson(env, `ring:${id}`, ring);
+    return json({ ok: true, until: ring.active.pausedUntil, left: 3 - ring.active.snoozes });
   }
   if (req.method === 'POST' && path === '/api/dismiss') {
     const ring = (await getJson(env, `ring:${id}`)) || { fired: {} };

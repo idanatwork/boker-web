@@ -28,9 +28,11 @@ export function dueAlarm(alarms, fired, now, tz) {
 // האם צריך לשלוח פוש הסלמה עכשיו.
 export function escalation(active, now) {
   const elapsedMin = (now - active.startedAt) / 60000;
-  if (elapsedMin >= 120) return { stop: true };
-  let every = elapsedMin < 20 ? 1 : 5;
+  if (elapsedMin >= 120 + (active.snoozes || 0) * 10) return { stop: true };
+  const sinceResume = active.pausedUntil && now >= active.pausedUntil ? (now - active.pausedUntil) / 60000 : elapsedMin;
+  let every = sinceResume < 20 ? 1 : 5;
   if (active.opened) every = Math.max(every, 2);
+  if (active.pausedUntil && now < active.pausedUntil) return { stop: false, due: false, elapsedMin };
   const due = !active.lastPushAt || now - active.lastPushAt >= every * 60000 - 8000;
   return { stop: false, due, elapsedMin };
 }
