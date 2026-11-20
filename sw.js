@@ -1,4 +1,4 @@
-const CACHE = 'boker-web-v5';
+const CACHE = 'boker-web-v6';
 const VISION = 'boker-vision-v1';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icons/icon-192.png', 'js/ui.js', 'js/store.js', 'js/tasks.js', 'js/vision.js', 'js/pushups-logic.js', 'js/brush-logic.js', 'js/profile.js', 'js/sounds.js'];
 const VISION_HOSTS = ['cdn.jsdelivr.net', 'storage.googleapis.com'];

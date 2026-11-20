@@ -228,7 +228,7 @@ function renderEditorSound() {
   const box = $('fSound'); box.textContent = '';
   for (const s of SOUNDS) {
     const on = (draft.sound || 'beep') === s.id;
-    const play = el('button', { type: 'button', class: 'lvl', 'aria-label': 'האזנה ל' + s.name, onclick: (e) => { e.preventDefault(); e.stopPropagation(); previewAc ||= audio.ensure(); previewAc.resume?.(); s.play(previewAc); } }, '▶');
+    const play = el('button', { type: 'button', class: 'lvl', 'aria-label': 'האזנה ל' + s.name, onclick: async (e) => { e.preventDefault(); e.stopPropagation(); previewAc = audio.ensure(); try { await previewAc.resume(); } catch { /* */ } s.play(previewAc); setTimeout(() => { if (!ringState) try { keepEl?.pause(); } catch { /* */ } }, 3000); } }, '▶');
     const pick = el('button', { type: 'button', class: 'lvl snd' + (on ? ' on' : ''), 'aria-pressed': String(on), onclick: (e) => { e.preventDefault(); draft.sound = s.id; haptic(6); renderEditorSound(); } }, s.name);
     box.append(el('div', { class: 'sndrow' }, pick, play));
   }
@@ -329,21 +329,37 @@ $('resetBtn').addEventListener('click', () => {
 
 // ---------- צליל ----------
 let actx = null, beepTimer = null, muted = false;
+// iOS: Web Audio מושתק במתג הצלצול ובמצב שקט, אלא אם הסשן מוגדר "playback". שתי דרכים יחד:
+// navigator.audioSession (iOS 16.4+) ואלמנט <audio> שקט בלולאה (עובד גם בגרסאות ישנות).
+let keepEl = null;
+function silentWavUrl() {
+  const n = 800, b = new Uint8Array(44 + n * 2), v = new DataView(b.buffer), w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 16000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+  return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+}
+function unlockAudio() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* */ }
+  try {
+    if (!keepEl) { keepEl = new Audio(silentWavUrl()); keepEl.loop = true; keepEl.setAttribute('playsinline', ''); keepEl.volume = 0.01; }
+    keepEl.play().catch(() => {});
+  } catch { /* */ }
+}
 const audio = {
-  ensure() { actx ||= new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume().catch(() => {}); return actx; },
+  ensure() { unlockAudio(); actx ||= new (window.AudioContext || window.webkitAudioContext)(); if (actx.state !== 'running') actx.resume().catch(() => {}); return actx; },
   mute(m) { muted = m; },
 };
-let curSound = soundById('beep');
 function beep() {
   if (muted || !actx || actx.state !== 'running') return;
   curSound.play(actx); haptic(200);
 }
+let curSound = soundById('beep');
 function startSound() {
   try { audio.ensure(); } catch { /* */ }
   stopSound(); muted = false; curSound = soundById(ringState?.alarm?.sound); beep(); beepTimer = setInterval(beep, curSound.every);
   setTimeout(() => { $('ringSound').hidden = !(actx && actx.state !== 'running') || $('ring').hidden; }, 300);
 }
-function stopSound() { clearInterval(beepTimer); beepTimer = null; }
+function stopSound() { clearInterval(beepTimer); beepTimer = null; try { keepEl?.pause(); } catch { /* */ } }
 document.addEventListener('pointerdown', () => { if (actx && actx.state === 'suspended') actx.resume().catch(() => {}); $('ringSound').hidden = !(actx && actx.state !== 'running') || $('ring').hidden; });
 $('ringSound').addEventListener('click', () => { audio.ensure(); $('ringSound').hidden = true; });
 
