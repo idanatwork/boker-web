@@ -1,0 +1,54 @@
+:root{--bg:#fafaf7;--fg:#1c1c1a;--mut:#74746c;--line:#e3e2dc;--acc:#2f6f5e;--danger:#b3402f}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.5 -apple-system,"SF Pro Text","Segoe UI",Arial,sans-serif}
+main{max-width:520px;margin:0 auto;padding:max(16px,env(safe-area-inset-top)) 16px 40px}
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+h1{font-size:24px;margin:8px 0;font-weight:700}h2{font-size:18px;margin:0 0 8px}
+.card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:12px 0;background:#fff}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+button{font:inherit;border:1px solid var(--line);background:#fff;color:var(--fg);padding:8px 14px;border-radius:8px;cursor:pointer}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+button.ghost{background:transparent}button.danger{color:var(--danger)}
+button.big{font-size:20px;padding:14px 24px;width:100%}
+button:disabled{opacity:.5}
+.list{list-style:none;margin:0;padding:0}
+.list li{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--line)}
+.list li:first-child{border-top:0}
+.a-time{font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;direction:ltr;display:inline-block}
+.a-meta{color:var(--mut);font-size:14px}
+.a-main{flex:1;cursor:pointer}
+.sw{position:relative;width:46px;height:28px;flex:none}
+.sw input{opacity:0;position:absolute;inset:0;margin:0;width:100%;height:100%;cursor:pointer}
+.sw i{position:absolute;inset:0;border-radius:14px;background:var(--line);transition:.15s}
+.sw i::after{content:"";position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:.15s}
+.sw input:checked+i{background:var(--acc)}.sw input:checked+i::after{right:21px}
+.note{color:var(--mut);font-size:14px;margin:6px 0}
+.ok{color:var(--acc)}.bad{color:var(--danger)}
+.stats{display:flex;gap:8px;text-align:center}.stats div{flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 4px}
+.stats b{display:block;font-size:24px}.stats span{font-size:12px;color:var(--mut)}
+.foot{text-align:center;color:var(--mut);font-size:13px;margin-top:20px}.foot a{color:var(--mut)}
+.steps{margin:6px 0;padding-inline-start:20px}.steps li{margin:4px 0}
+.sheet{position:fixed;inset:0;background:var(--bg);overflow:auto;padding:max(16px,env(safe-area-inset-top)) 16px}
+.sheet form{max-width:520px;margin:0 auto}
+label,fieldset{display:block;margin:12px 0;border:0;padding:0}legend{padding:0;margin-bottom:4px}
+input[type=time],input[type=text],select{width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fff;direction:ltr;text-align:right}
+select{direction:rtl}input[type=text]{direction:rtl}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips label{margin:0}.chips input{display:none}
+.chips span{display:inline-block;min-width:40px;text-align:center;border:1px solid var(--line);border-radius:18px;padding:6px 10px;background:#fff;cursor:pointer}
+.chips input:checked+span{background:var(--acc);border-color:var(--acc);color:#fff}
+.ring{position:fixed;inset:0;background:#fffdf5;overflow:auto;z-index:10;display:flex}
+.ring-inner{margin:auto;width:100%;max-width:480px;padding:24px;text-align:center}
+.ring-clock{font-size:64px;font-weight:700;direction:ltr;font-variant-numeric:tabular-nums}
+.ring-label{color:var(--mut);margin-bottom:20px;min-height:1.5em}
+.q{font-size:44px;direction:ltr;margin:16px 0;font-variant-numeric:tabular-nums}
+.ans{font-size:36px;direction:ltr;min-height:56px;border-bottom:2px solid var(--line);margin:0 auto 12px;width:70%}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;direction:ltr}
+.pad button{font-size:26px;padding:14px}
+.prog{height:10px;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin:16px 0}
+.prog i{display:block;height:100%;width:0;background:var(--acc);transition:width .1s}
+.mantra{font-size:22px;line-height:1.8;margin:16px 0}
+.shake{animation:sh .25s}@keyframes sh{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.night{position:fixed;inset:0;background:#000;color:#555;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+.night-clock{font-size:72px;font-weight:300;direction:ltr;color:#777}.night-next{font-size:18px}.night-hint{font-size:13px;position:absolute;bottom:max(20px,env(safe-area-inset-bottom));padding:0 24px;text-align:center}
+[hidden]{display:none!important}

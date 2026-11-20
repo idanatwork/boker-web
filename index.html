@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fafaf7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="בוקר-ווב">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+<title>בוקר-ווב</title>
+</head>
+<body>
+<main id="home">
+  <header class="top"><h1>בוקר-ווב</h1><button id="nightBtn" class="ghost">מצב לילה</button></header>
+
+  <section id="setup" class="card" hidden></section>
+
+  <section class="card">
+    <div class="row"><h2>שעונים</h2><button id="addBtn" class="primary">שעון חדש</button></div>
+    <ul id="alarmList" class="list"></ul>
+    <p id="emptyMsg" class="note">אין שעונים עדיין.</p>
+  </section>
+
+  <section class="card" id="statsCard">
+    <h2>רצף</h2>
+    <div class="stats"><div><b id="streakNow">0</b><span>ימים ברצף</span></div><div><b id="streakBest">0</b><span>שיא</span></div><div><b id="avgTime">-</b><span>זמן כיבוי ממוצע</span></div></div>
+  </section>
+
+  <footer class="foot"><span id="ver"></span> · <a href="#" id="testRing">בדיקת מסך צלצול</a></footer>
+</main>
+
+<div id="editor" class="sheet" hidden>
+  <form id="editForm" class="card">
+    <h2 id="editTitle">שעון חדש</h2>
+    <label>שעה <input type="time" id="fTime" required value="06:30"></label>
+    <fieldset><legend>ימים</legend><div id="fDays" class="chips"></div></fieldset>
+    <label>תווית <input type="text" id="fLabel" maxlength="40" placeholder="אופציונלי"></label>
+    <label>משימה
+      <select id="fTask">
+        <option value="math">חשבון</option>
+        <option value="mantra">מודה אני בקול</option>
+        <option value="both">שניהם</option>
+      </select>
+    </label>
+    <div class="row"><button type="button" id="fCancel" class="ghost">ביטול</button><button type="button" id="fDelete" class="ghost danger" hidden>מחק</button><button class="primary" type="submit">שמור</button></div>
+  </form>
+</div>
+
+<div id="ring" class="ring" hidden>
+  <div class="ring-inner">
+    <div id="ringClock" class="ring-clock"></div>
+    <div id="ringLabel" class="ring-label"></div>
+    <button id="ringSound" class="primary big" hidden>הקש להפעלת צליל</button>
+    <div id="task"></div>
+  </div>
+</div>
+
+<div id="night" class="night" hidden>
+  <div id="nightClock" class="night-clock"></div>
+  <div id="nightNext" class="night-next"></div>
+  <div class="night-hint">השאר את האפליקציה פתוחה והטלפון על המטען. הקש כדי לצאת.</div>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js" type="module"></script>
+</body>
+</html>

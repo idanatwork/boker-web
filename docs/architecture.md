@@ -46,18 +46,21 @@
 הערה: KV הוא eventually consistent. לשינויים בשעון זה מקובל. אם יתגלו בעיות, מעבר ל-D1 (SQLite) עם טבלאות alarms, devices, stats.
 
 ## API
-כל הבקשות עם `Authorization: Bearer <deviceToken>` (אקראי, נוצר בהרשמה, נשמר ב-localStorage).
+זיהוי מכשיר: פרמטר `?id=<deviceId>` ו-`Authorization: Bearer <deviceToken>`. המכשיר מייצר את שניהם בעצמו (UUID אקראי) ונרשם דרך `/api/register`.
 
 | שיטה ונתיב | פעולה |
 |---|---|
-| `POST /api/register` | שמירת מנוי push, מחזיר deviceId ו-deviceToken |
-| `GET /api/alarms` | רשימת שעונים |
-| `PUT /api/alarms/:id` | יצירה או עדכון |
-| `DELETE /api/alarms/:id` | מחיקה |
-| `POST /api/ring/:id/dismiss` | כיבוי אחרי משימה. עוצר הסלמה, רושם סטטיסטיקה |
-| `POST /api/ring/:id/snooze` | נודניק |
-| `GET /api/stats?from=&to=` | סטטיסטיקות |
-| `POST /api/test-push` | פוש בדיקה |
+| `POST /api/register` | שמירת מנוי push ואזור זמן. אותו deviceId עם טוקן אחר נדחה (403) |
+| `GET /api/alarms` | רשימת השעונים |
+| `PUT /api/alarms` | החלפת כל רשימת השעונים (עד 20) |
+| `GET /api/state` | האם יש צלצול פעיל |
+| `POST /api/opened` | האפליקציה נפתחה מההתראה. השרת מאט את הפושים |
+| `POST /api/dismiss` | כיבוי אחרי משימה. עוצר את ההסלמה |
+| `POST /api/test-push` | פוש בדיקה מיידי |
+
+הערה: המפרט המקורי תיאר נתיב לכל שעון. בגרסה הראשונית מחליפים את הרשימה כולה, כי זה פשוט יותר והנתונים קטנים.
+
+המודל ב-KV פשוט יותר מהתכנון: מפתח `dev:{id}` אחד (מנוי, אזור זמן, שעונים) ומפתח `ring:{id}` (צלצול פעיל והיסטוריית "כבר צלצל היום").
 
 ## אבטחה ופרטיות
 - אין אימות משתמש. הטוקן הוא סוד המכשיר. אפשרות עתידית לחיבור חשבון.

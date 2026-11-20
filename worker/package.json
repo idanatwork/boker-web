@@ -1,0 +1,3 @@
+{ "name": "boker-web-worker", "private": true, "type": "module",
+  "scripts": { "dev": "wrangler dev --test-scheduled", "deploy": "wrangler deploy", "test": "node test/webpush.test.mjs" },
+  "devDependencies": { "wrangler": "^4" } }

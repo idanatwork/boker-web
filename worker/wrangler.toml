@@ -1,0 +1,17 @@
+name = "boker-web"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+workers_dev = true
+
+[triggers]
+crons = ["* * * * *"]
+
+[[kv_namespaces]]
+binding = "KV"
+id = "REPLACE_WITH_KV_ID"
+
+[vars]
+ALLOWED_ORIGIN = "https://idanatwork.github.io"
+VAPID_SUBJECT = "https://idanatwork.github.io/boker-web/"
+VAPID_PUBLIC = "BEpmfh7rXUOVGCW-IZhblhdzwzjkRusdPywpR7z01ZD1WckoMvOKn5g6l2qkOQjrnx0tbhEsBg03r5pn-9lswwU"
+# סוד, לא בקובץ: VAPID_PRIVATE_JWK (wrangler secret put VAPID_PRIVATE_JWK)
