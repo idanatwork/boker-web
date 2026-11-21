@@ -52,7 +52,7 @@ document.querySelectorAll('[data-back]').forEach((b) => { b.append(icon('chevron
 $('nightBack').append(icon('chevron', 20), 'חזרה');
 $('ringBack').append(icon('chevron', 20), 'חזרה');
 $('nightBtn').append(icon('moon'));
-$('settingsBtn').append(icon('gear'));
+$('settingsBtn').prepend(icon('gear', 22));
 $('addBtn').append(icon('plus', 18), 'שעון חדש');
 
 // ---------- התקנה והתראות ----------
@@ -132,12 +132,37 @@ function renderGreet() {
   const hr = new Date().getHours(); const hi = hr < 5 ? 'לילה טוב' : hr < 12 ? 'בוקר טוב' : hr < 18 ? 'צהריים טובים' : 'ערב טוב';
   g.append(avatarNode(), el('div', {}, el('div', { class: 'greet-t' }, profile.name ? `${hi}, ${profile.name}!` : `${hi}!`), el('div', { class: 'greet-s' }, 'מוכנים לקום כמו ויקינגים?')));
 }
+const HEB_DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+const svg = (inner, vb, cls) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', vb); if (cls) s.setAttribute('class', cls); s.setAttribute('aria-hidden', 'true'); s.innerHTML = inner; return s; };
+const FLAME = 'M12 2c1 4 5 6 5 11a5 5 0 01-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-4-1-6 1-10z';
+function renderTop() {
+  const now = new Date();
+  $('dateLine').textContent = `יום ${HEB_DAYS[now.getDay()]} · ${pad2(now.getDate())}.${pad2(now.getMonth() + 1)}`;
+  const s = computeStreak(store.history); const sp = $('streakPill'); sp.textContent = '';
+  sp.append(svg(`<path fill="currentColor" d="${FLAME}"/>`, '0 0 24 24'), String(s.now));
+  const w = $('weekTop'); w.textContent = '';
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now); d.setDate(now.getDate() - now.getDay() + i);
+    const on = !!store.history[todayStr(d)]?.success, today = i === now.getDay();
+    w.append(el('div', { class: 'wk' + (today ? ' today' : '') + (on ? ' on' : ''), 'aria-label': `${HEB_DAYS[i]} ${on ? 'הושלם' : ''}` }, el('span', {}, DAYS[i]), el('i', {}, on ? icon('check', 14) : String(d.getDate()))));
+  }
+}
+function whenWord(date) {
+  const t0 = new Date(); t0.setHours(0, 0, 0, 0); const d0 = new Date(date); d0.setHours(0, 0, 0, 0);
+  const diff = Math.round((d0 - t0) / 864e5);
+  return diff <= 0 ? 'היום' : diff === 1 ? 'מחר' : 'ביום ' + HEB_DAYS[date.getDay()];
+}
+const HERO_SCENE = '<circle cx="320" cy="32" r="1.6" fill="#fff" opacity=".8"/><circle cx="60" cy="44" r="1.3" fill="#fff" opacity=".7"/><circle cx="150" cy="22" r="1.5" fill="#fff" opacity=".9"/><circle cx="250" cy="60" r="1.2" fill="#fff" opacity=".6"/><circle cx="30" cy="100" r="1.4" fill="#fff" opacity=".6"/>';
+const CLOUDS = '<path fill="#6a3f9e" opacity=".75" d="M0 60 Q30 38 60 56 Q85 30 120 54 Q150 36 185 56 Q220 34 255 56 Q290 40 320 58 Q350 44 390 56 V90 H0z"/><path fill="#14153f" d="M0 74 Q22 54 52 70 Q76 48 108 70 Q140 52 170 72 Q205 50 240 72 Q275 54 306 72 Q340 56 390 70 V90 H0z"/>';
 function renderHero() {
-  renderGreet();
+  renderGreet(); renderTop();
   const h = $('hero'); h.textContent = '';
   const n = nextAlarm(store.alarms);
-  if (!n) { h.append(el('div', { class: 'hero-l' }, 'אין שעון פעיל'), el('div', { class: 'hero-t', style: 'opacity:.25' }, '--:--')); return; }
-  h.append(el('div', { class: 'hero-l' }, 'השעון הבא'), el('div', { class: 'hero-t' }, n.alarm.time), el('div', { class: 'hero-r' }, fmtRel(n.date - new Date())));
+  h.append(el('div', { class: 'sun' }), svg(HERO_SCENE, '0 0 390 140', 'hero-stars'));
+  const inner = el('div', { class: 'hero-in' });
+  if (!n) inner.append(el('div', { class: 'hero-l' }, 'אין שעון פעיל'), el('div', { class: 'hero-t', style: 'opacity:.3' }, '--:--'), el('div', { class: 'hero-r' }, 'לחץ על + כדי להוסיף שעון'));
+  else inner.append(el('div', { class: 'hero-l' }, `השעון הבא: ${whenWord(n.date)}`), el('div', { class: 'hero-t' }, n.alarm.time), el('div', { class: 'hero-r' }, fmtRel(n.date - new Date()), n.alarm.tasks?.length ? ` · ${tasksLabel(n.alarm)}` : ''));
+  h.append(inner, svg(CLOUDS, '0 0 390 90', 'hero-clouds'));
 }
 function renderAlarms() {
   const ul = $('alarmList'); ul.textContent = '';
@@ -484,3 +509,8 @@ if ('serviceWorker' in navigator) {
 }
 const qs = new URLSearchParams(location.search);
 if (qs.get('ring')) startRing(qs.get('ring'));
+
+$('tabHome').prepend(icon('home', 22)); $('tabStats').prepend(icon('chart', 22));
+$('tabHome').addEventListener('click', () => { $('home').scrollTo({ top: 0, behavior: 'smooth' }); setTab('tabHome'); });
+$('tabStats').addEventListener('click', () => { $('streakBlock').scrollIntoView({ behavior: 'smooth', block: 'start' }); setTab('tabStats'); });
+function setTab(id) { for (const t of document.querySelectorAll('.tabbar .tab')) { t.classList.toggle('on', t.id === id); } }

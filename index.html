@@ -27,25 +27,26 @@
 
 <section id="home" class="screen">
   <header class="bar home-bar">
-    <h1>קום אח שלי</h1>
+    <div class="hb-t"><h1>קום אח שלי</h1><div id="dateLine" class="dateline"></div></div>
     <div class="bar-end">
+      <span id="streakPill" class="spill" aria-label="רצף"></span>
       <button id="nightBtn" class="icon-btn" aria-label="מצב לילה" title="מצב לילה"></button>
-      <button id="settingsBtn" class="icon-btn" aria-label="הגדרות" title="הגדרות"></button>
     </div>
   </header>
   <main class="content">
     <div id="greet" class="greet"></div>
+    <div id="weekTop" class="weektop" aria-label="השבוע"></div>
     <div id="hero" class="hero"></div>
     <section id="setup" class="card" hidden></section>
     <section class="block">
-      <div class="block-head"><h2>שעונים</h2><button id="addBtn" class="primary sm"></button></div>
+      <div class="block-head"><h2>השעונים שלי</h2><button id="addBtn" class="primary sm"></button></div>
       <ul id="alarmList" class="list" aria-label="רשימת שעונים"></ul>
       <div id="empty" class="empty" hidden>
         <p class="empty-t">עוד אין שעונים</p>
         <p class="note">צור שעון, בחר משימה, והוא לא ישתוק עד שתסיים אותה.</p>
       </div>
     </section>
-    <section class="block">
+    <section class="block" id="streakBlock">
       <div class="block-head"><h2>רצף</h2></div>
       <div class="card streak">
         <div class="week" id="week" aria-label="שבעת הימים האחרונים"></div>
@@ -58,6 +59,11 @@
     </section>
     <footer class="foot"><span id="ver"></span></footer>
   </main>
+  <nav class="tabbar" aria-label="ניווט">
+    <button id="tabHome" class="tab on" aria-current="page"><span>בית</span></button>
+    <button id="tabStats" class="tab"><span>רצף</span></button>
+    <button id="settingsBtn" class="tab" aria-label="הגדרות"><span>הגדרות</span></button>
+  </nav>
 </section>
 
 <section id="editor" class="screen" hidden role="dialog" aria-modal="true" aria-labelledby="editTitle">

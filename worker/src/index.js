@@ -67,7 +67,7 @@ async function handle(req, env) {
   if (req.method === 'PUT' && path === '/api/alarms') {
     const b = await req.json();
     if (!Array.isArray(b.alarms) || b.alarms.length > 20) return json({ error: 'bad request' }, 400);
-    const TASKS = ['math', 'pushups', 'mantra', 'brush'];
+    const TASKS = ['math', 'pushups', 'mantra', 'brush', 'bed', 'sky'];
     const legacy = { math: ['math'], mantra: ['mantra'], both: ['math', 'mantra'] };
     dev.alarms = b.alarms.map((x) => {
       let tasks = Array.isArray(x.tasks) ? x.tasks.filter((t) => TASKS.includes(t)) : legacy[x.task] || [];
