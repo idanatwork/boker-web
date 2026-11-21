@@ -26,6 +26,31 @@ const vapidOf = (env) => ({
 const getJson = async (env, key) => (await env.KV.get(key, 'json')) || null;
 const putJson = (env, key, val, opts) => env.KV.put(key, JSON.stringify(val), opts);
 
+// אינדקס מכשירים במפתח אחד: מונע KV.list בכל דקה (מגבלת 1000 list ביום בחינם).
+async function addToIndex(env, id) {
+  const idx = await getJson(env, 'idx');
+  if (!idx || idx.includes(id)) return;
+  idx.push(id);
+  await putJson(env, 'idx', idx);
+}
+async function deviceIds(env) {
+  const idx = await getJson(env, 'idx');
+  if (idx) return idx;
+  const ids = []; let cursor;
+  do {
+    const page = await env.KV.list({ prefix: 'dev:', cursor });
+    for (const k of page.keys) ids.push(k.name.slice(4));
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  const keep = [];
+  for (const id of ids) {
+    const d = await getJson(env, `dev:${id}`);
+    if (d?.sub?.endpoint && /webhook\.site/.test(d.sub.endpoint)) { await env.KV.delete(`dev:${id}`); await env.KV.delete(`ring:${id}`); } else keep.push(id);
+  }
+  await putJson(env, 'idx', keep);
+  return keep;
+}
+
 async function auth(env, req) {
   const m = /^Bearer (.+)$/.exec(req.headers.get('Authorization') || '');
   const id = new URL(req.url).searchParams.get('id') || req.headers.get('X-Device-Id');
@@ -56,6 +81,7 @@ async function handle(req, env) {
     if (cur && cur.token !== b.token) return json({ error: 'forbidden' }, 403);
     const dev = { token: b.token, sub: b.sub, tz: b.tz || cur?.tz || 'Asia/Jerusalem', alarms: cur?.alarms || [], createdAt: cur?.createdAt || Date.now() };
     await putJson(env, `dev:${b.id}`, dev);
+    await addToIndex(env, b.id);
     return json({ ok: true });
   }
 
@@ -63,6 +89,12 @@ async function handle(req, env) {
   if (!a) return json({ error: 'unauthorized' }, 401);
   const { id, dev } = a;
 
+  if (req.method === 'POST' && path === '/api/unregister') {
+    await env.KV.delete(`dev:${id}`); await env.KV.delete(`ring:${id}`);
+    const idx = (await getJson(env, 'idx')) || [];
+    await putJson(env, 'idx', idx.filter((x) => x !== id));
+    return json({ ok: true });
+  }
   if (req.method === 'GET' && path === '/api/alarms') return json({ alarms: dev.alarms, tz: dev.tz });
   if (req.method === 'PUT' && path === '/api/alarms') {
     const b = await req.json();
@@ -82,6 +114,7 @@ async function handle(req, env) {
     else if (b.bedtime === null) dev.bedtime = null;
     if (b.tz) dev.tz = String(b.tz);
     await putJson(env, `dev:${id}`, dev);
+    await addToIndex(env, id);
     return json({ ok: true });
   }
   if (req.method === 'GET' && path === '/api/state') {
@@ -120,12 +153,11 @@ async function handle(req, env) {
 }
 
 export async function tick(env, now = Date.now()) {
-  let cursor;
   const results = [];
-  do {
-    const page = await env.KV.list({ prefix: 'dev:', cursor });
-    for (const k of page.keys) {
-      const id = k.name.slice(4);
+  const ids = await deviceIds(env);
+  for (const id of ids) {
+    {
+      const k = { name: `dev:${id}` };
       try {
       const dev = await getJson(env, k.name);
       if (!dev?.sub) continue;
@@ -161,8 +193,7 @@ export async function tick(env, now = Date.now()) {
       if (changed) await putJson(env, `ring:${id}`, ring, { expirationTtl: 60 * 60 * 24 * 14 });
       } catch (e) { results.push({ id: id.slice(0, 6), error: String(e?.message || e) }); }
     }
-    cursor = page.list_complete ? undefined : page.cursor;
-  } while (cursor);
+  }
   return results;
 }
 
@@ -181,7 +212,8 @@ export default {
   async scheduled(_event, env, ctx) {
     ctx.waitUntil((async () => {
       const r = await tick(env);
-      await env.KV.put('meta:lastTick', JSON.stringify({ at: Date.now(), results: r }), { expirationTtl: 3600 });
+      // כתיבה רק כשיש מה לתעד (מגבלת 1000 כתיבות ביום בחינם)
+      if (r.length) await env.KV.put('meta:lastTick', JSON.stringify({ at: Date.now(), results: r }), { expirationTtl: 3600 });
     })());
   },
 };
