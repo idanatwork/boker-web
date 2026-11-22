@@ -29,8 +29,8 @@ self.addEventListener('fetch', (e) => {
 
 self.addEventListener('push', (e) => {
   let d = {};
-  try { d = e.data ? e.data.json() : {}; } catch { d = { title: 'קום אח שלי', body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'קום אח שלי', {
+  try { d = e.data ? e.data.json() : {}; } catch { d = { title: 'קום!', body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'קום!', {
     body: d.body || '', tag: d.tag || 'alarm', renotify: true, requireInteraction: !!d.ring,
     lang: 'he', dir: 'rtl', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
     data: { alarmId: d.alarmId || null, ring: !!d.ring },

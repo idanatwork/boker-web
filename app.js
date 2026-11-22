@@ -1,4 +1,4 @@
-// קום אח שלי: לקוח PWA.
+// קום!: לקוח PWA.
 import { $, el, icon, toast, haptic, pad2, fmtRel } from './js/ui.js';
 import { loadStore, saveStore, todayStr, computeStreak, nextAlarm, TASK_ORDER, resolveRandomTasks } from './js/store.js';
 import { RUNNERS, TASK_INFO, openCamera, stopStream, grabSquare, thumbOf, cameraErrorText } from './js/tasks.js';
@@ -500,7 +500,7 @@ setInterval(() => {
 }, 1000);
 
 // ---------- אתחול ----------
-$('ver').textContent = 'קום אח שלי ' + CFG.VERSION;
+$('ver').textContent = 'קום! ' + CFG.VERSION;
 applyIcon();
 renderAll();
 showSplash();
