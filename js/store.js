@@ -3,6 +3,13 @@ export const todayStr = (d = new Date()) => `${d.getFullYear()}-${String(d.getMo
 const LEGACY = { math: ['math'], mantra: ['mantra'], both: ['math', 'mantra'] };
 export const TASK_ORDER = ['math', 'pushups', 'mantra', 'brush', 'bed', 'sky'];
 
+// "אקראי": בזמן הצלצול נבחרת משימה אחת מהקיימות. משימות שדורשות תמונת ייחוס נכללות רק אם יש תמונה.
+export function resolveRandomTasks(alarm, st, rnd = Math.random) {
+  if (!alarm.tasks || !alarm.tasks.includes('random')) return alarm;
+  const pool = TASK_ORDER.filter((k) => !(k === 'bed' && !st.bedRef) && !(k === 'brush' && !st.brushRef));
+  return { ...alarm, tasks: [pool[Math.min(pool.length - 1, Math.floor(rnd() * pool.length))]] };
+}
+
 export function migrate(s) {
   s.alarms ||= []; s.history ||= {}; s.localFired ||= {};
   for (const a of s.alarms) {
