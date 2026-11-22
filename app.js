@@ -130,7 +130,7 @@ const tasksLabel = (a) => a.tasks.map((t) => TASK_INFO[t].name).join(', ');
 function renderGreet() {
   const g = $('greet'); g.textContent = '';
   const hr = new Date().getHours(); const hi = hr < 5 ? 'לילה טוב' : hr < 12 ? 'בוקר טוב' : hr < 18 ? 'צהריים טובים' : 'ערב טוב';
-  g.append(avatarNode(), el('div', {}, el('div', { class: 'greet-t' }, profile.name ? `${hi}, ${profile.name}!` : `${hi}!`), el('div', { class: 'greet-s' }, 'מוכנים לקום כמו ויקינגים?')));
+  g.append(avatarNode(), el('div', {}, el('div', { class: 'greet-t' }, profile.name ? `${hi}, ${profile.name}!` : `${hi}!`), el('div', { class: 'greet-s' }, 'מוכנים לקום?')));
 }
 const HEB_DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 const svg = (inner, vb, cls) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', vb); if (cls) s.setAttribute('class', cls); s.setAttribute('aria-hidden', 'true'); s.innerHTML = inner; return s; };
