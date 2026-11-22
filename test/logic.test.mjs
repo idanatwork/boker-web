@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { makeCounter } from '../js/pushups-logic.js';
 import { signature, similarity } from '../js/brush-logic.js';
+import { resolveRandomTasks, TASK_ORDER } from '../js/store.js';
 
 // שכיבות סמיכה: סינוס עם רעש, 10 חזרות, 15fps
 function run(reps, { amp = 0.06, noise = 0.004, periodMs = 1800, seed = 1 } = {}) {
@@ -30,3 +31,18 @@ assert.ok(similarity(ref, signature(sceneA(0, 0))) > 0.95);
 assert.ok(similarity(ref, signature(sceneA(-25, 2))) > 0.7, 'darker + shifted');
 assert.ok(similarity(ref, signature(sceneB())) < 0.5, 'different scene');
 console.log('logic tests passed');
+
+// אקראי: בוחר משימה אחת, ומדלג על משימות שחסרה להן תמונת ייחוס
+{
+  const al = { tasks: ['random'] };
+  assert.deepEqual(resolveRandomTasks({ tasks: ['math'] }, {}).tasks, ['math']);
+  const seen = new Set();
+  for (let i = 0; i < 6; i++) seen.add(resolveRandomTasks(al, {}, () => i / 6).tasks[0]);
+  assert.ok(!seen.has('bed') && !seen.has('brush'));
+  assert.ok(seen.size === 4);
+  const full = new Set();
+  for (let i = 0; i < 6; i++) full.add(resolveRandomTasks(al, { bedRef: 1, brushRef: 1 }, () => i / 6).tasks[0]);
+  assert.deepEqual([...full].sort(), [...TASK_ORDER].sort());
+  assert.equal(resolveRandomTasks(al, {}, () => 0.9999999).tasks.length, 1);
+  console.log('ok random task');
+}

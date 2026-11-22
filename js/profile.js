@@ -61,9 +61,11 @@ export function showSplash() {
   const sp = $('splash');
   if (sessionStorage.getItem('bw-splash')) return;
   sessionStorage.setItem('bw-splash', '1');
-  $('splashTitle').textContent = profile.name ? `השעון של ${profile.name}` : 'קום אח שלי';
+  $('splashTitle').textContent = 'קום!';
+  const nm = $('splashName'); nm.textContent = profile.name ? `השעון של ${profile.name}` : ''; nm.hidden = !profile.name;
   const ph = $('splashPhoto'); ph.textContent = '';
-  if (profile.photo) ph.append(el('img', { src: profile.photo, alt: '' })); else ph.innerHTML = HELMET_SVG;
+  if (profile.photo) ph.append(el('img', { src: profile.photo, alt: '' }));
+  ph.hidden = !profile.photo;
   sp.hidden = false;
   const out = () => { sp.classList.add('out'); setTimeout(() => { sp.hidden = true; }, 500); };
   sp.addEventListener('click', out, { once: true });

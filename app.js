@@ -1,6 +1,6 @@
-// קום אח שלי: לקוח PWA.
+// קום!: לקוח PWA.
 import { $, el, icon, toast, haptic, pad2, fmtRel } from './js/ui.js';
-import { loadStore, saveStore, todayStr, computeStreak, nextAlarm, TASK_ORDER } from './js/store.js';
+import { loadStore, saveStore, todayStr, computeStreak, nextAlarm, TASK_ORDER, resolveRandomTasks } from './js/store.js';
 import { RUNNERS, TASK_INFO, openCamera, stopStream, grabSquare, thumbOf, cameraErrorText } from './js/tasks.js';
 import { SOUNDS, soundById } from './js/sounds.js';
 import { signature } from './js/brush-logic.js';
@@ -130,7 +130,7 @@ const tasksLabel = (a) => a.tasks.map((t) => TASK_INFO[t].name).join(', ');
 function renderGreet() {
   const g = $('greet'); g.textContent = '';
   const hr = new Date().getHours(); const hi = hr < 5 ? 'לילה טוב' : hr < 12 ? 'בוקר טוב' : hr < 18 ? 'צהריים טובים' : 'ערב טוב';
-  g.append(avatarNode(), el('div', {}, el('div', { class: 'greet-t' }, profile.name ? `${hi}, ${profile.name}!` : `${hi}!`), el('div', { class: 'greet-s' }, 'מוכנים לקום כמו ויקינגים?')));
+  g.append(avatarNode(), el('div', {}, el('div', { class: 'greet-t' }, profile.name ? `${hi}, ${profile.name}!` : `${hi}!`), el('div', { class: 'greet-s' }, 'מוכנים לקום?')));
 }
 const HEB_DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 const svg = (inner, vb, cls) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', vb); if (cls) s.setAttribute('class', cls); s.setAttribute('aria-hidden', 'true'); s.innerHTML = inner; return s; };
@@ -219,11 +219,11 @@ document.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('cl
 }));
 function renderEditorTasks() {
   const box = $('fTasks'); box.textContent = '';
-  for (const t of TASK_ORDER) {
+  for (const t of [...TASK_ORDER, 'random']) {
     const on = draft.tasks.includes(t);
     const c = el('input', { type: 'checkbox' }); c.checked = on;
     c.addEventListener('change', () => {
-      draft.tasks = TASK_ORDER.filter((x) => (x === t ? c.checked : draft.tasks.includes(x)));
+      draft.tasks = t === 'random' ? (c.checked ? ['random'] : []) : TASK_ORDER.filter((x) => (x === t ? c.checked : draft.tasks.includes(x)));
       $('taskErr').hidden = draft.tasks.length > 0; haptic(6); renderEditorTasks();
       if (t === 'pushups' && c.checked) preloadVision();
     });
@@ -406,7 +406,8 @@ const tickRingClock = () => { const d = new Date(); $('ringClock').textContent =
 function startRing(alarmId, { demo = false, tasks = null } = {}) {
   if (ringState) return;
   const saved = store.alarms.find((a) => a.id === alarmId);
-  const alarm = demo ? { id: 'demo', label: 'בדיקה', tasks: tasks || ['math'], reps: Math.min(3, saved?.reps || 3), level: saved?.level || 2, snooze: 5 } : saved || { id: alarmId, label: '', tasks: ['math'], reps: 10, snooze: 0, level: 2 };
+  let alarm = demo ? { id: 'demo', label: 'בדיקה', tasks: tasks || ['math'], reps: Math.min(3, saved?.reps || 3), level: saved?.level || 2, snooze: 5 } : saved || { id: alarmId, label: '', tasks: ['math'], reps: 10, snooze: 0, level: 2 };
+  alarm = resolveRandomTasks(alarm, store);
   ringState = { alarm, startedAt: Date.now(), demo, cleanup: [], stepIdx: 0, snoozes: 0 };
   $('ringLabel').textContent = alarm.label || '';
   $('ring').classList.remove('calm');
@@ -499,7 +500,7 @@ setInterval(() => {
 }, 1000);
 
 // ---------- אתחול ----------
-$('ver').textContent = 'קום אח שלי ' + CFG.VERSION;
+$('ver').textContent = 'קום! ' + CFG.VERSION;
 applyIcon();
 renderAll();
 showSplash();
