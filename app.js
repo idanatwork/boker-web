@@ -5,7 +5,7 @@ import { RUNNERS, TASK_INFO, openCamera, stopStream, grabSquare, thumbOf, camera
 import { SOUNDS, soundById } from './js/sounds.js';
 import { signature } from './js/brush-logic.js';
 import { loadPose } from './js/vision.js';
-import { profile, setName, setPhotoFromFile, clearPhoto, makeIcon, applyIcon, avatarNode, confetti, showSplash } from './js/profile.js';
+import { profile, setName, setPhotoFromFile, clearPhoto, makeIcon, applyIcon, pickPresetIcon, setCustomIcon, resetIcon, ICON_COUNT, iconPath, avatarNode, confetti, showSplash } from './js/profile.js';
 
 const CFG = window.BW_CONFIG;
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Jerusalem';
@@ -347,6 +347,9 @@ function renderProfileSettings() {
   const ph = $('spPhoto'); ph.textContent = ''; ph.append(...avatarNode('x').childNodes);
   $('nameInput').value = profile.name || ''; $('photoDel').hidden = !profile.photo; $('photoBtn').textContent = profile.photo ? 'החלף תמונה' : 'בחר תמונה';
   $('iconBtn').disabled = !profile.photo;
+  const gr = $('iconGrid'); gr.textContent = '';
+  for (let n = 1; n <= ICON_COUNT; n++) gr.append(el('button', { role: 'radio', 'aria-checked': String(profile.iconPick === n), 'aria-label': `אייקון ${n}`, onclick: async () => { try { await pickPresetIcon(n); renderProfileSettings(); toast('האייקון נבחר. כדי שיופיע במסך הבית צריך להוסיף את האפליקציה מחדש.', { ms: 5000 }); } catch { toast('לא הצלחתי לטעון את האייקון.', { kind: 'err' }); } } }, el('img', { src: iconPath(n), alt: '' })));
+  $('iconReset').hidden = !profile.icon; $('iconLink').hidden = typeof profile.iconPick !== 'number';
 }
 $('nameInput').addEventListener('input', () => { setName($('nameInput').value); renderGreet(); });
 $('photoBtn').addEventListener('click', () => $('photoFile').click());
@@ -357,6 +360,17 @@ $('photoFile').addEventListener('change', async () => {
 });
 $('photoDel').addEventListener('click', () => { clearPhoto(); renderProfileSettings(); renderGreet(); toast('התמונה הוסרה'); });
 $('iconBtn').addEventListener('click', async () => { await makeIcon(); toast('האייקון עודכן. עכשיו מוסיפים למסך הבית מחדש.', { ms: 5000 }); });
+$('iconUpBtn').addEventListener('click', () => $('iconFile').click());
+$('iconFile').addEventListener('change', async () => {
+  const f = $('iconFile').files[0]; if (!f) return;
+  try { await setCustomIcon(f); toast('האייקון נשמר במכשיר. כדי שיופיע במסך הבית צריך להוסיף את האפליקציה מחדש.', { ms: 5000 }); } catch { toast('לא הצלחתי לקרוא את התמונה.', { kind: 'err' }); }
+  $('iconFile').value = ''; renderProfileSettings();
+});
+$('iconReset').addEventListener('click', () => { resetIcon(); renderProfileSettings(); toast('חזרנו לאייקון ברירת המחדל'); });
+$('iconLink').addEventListener('click', async () => {
+  const u = `${location.origin}${location.pathname}?icon=${String(profile.iconPick).padStart(2, '0')}`;
+  try { await navigator.clipboard.writeText(u); toast('הקישור הועתק. פתח אותו ב-Safari והוסף למסך הבית.', { ms: 5000 }); } catch { toast(u, { ms: 8000 }); }
+});
 $('settingsBtn').addEventListener('click', () => openScreen('settings', () => { renderSettings(); renderProfileSettings(); }));
 $('resetBtn').addEventListener('click', () => {
   if (!confirm('למחוק את כל השעונים וההיסטוריה במכשיר הזה?')) return;

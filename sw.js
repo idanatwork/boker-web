@@ -1,6 +1,6 @@
-const CACHE = 'boker-web-v10';
+const CACHE = 'boker-web-v11';
 const VISION = 'boker-vision-v1';
-const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icons/icon-192.png', 'js/ui.js', 'js/store.js', 'js/tasks.js', 'js/vision.js', 'js/pushups-logic.js', 'js/brush-logic.js', 'js/profile.js', 'js/sounds.js'];
+const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icons/icon-192.png', ...Array.from({ length: 12 }, (_, i) => `icons/choices/i${String(i + 1).padStart(2, '0')}.png`), 'js/ui.js', 'js/store.js', 'js/tasks.js', 'js/vision.js', 'js/pushups-logic.js', 'js/brush-logic.js', 'js/profile.js', 'js/sounds.js'];
 const VISION_HOSTS = ['cdn.jsdelivr.net', 'storage.googleapis.com'];
 
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
