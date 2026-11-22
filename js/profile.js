@@ -6,7 +6,7 @@ export const loadProfile = () => { try { return JSON.parse(localStorage.getItem(
 const saveProfile = (p) => { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch { /* מלא */ } };
 export const profile = loadProfile();
 export const setName = (n) => { profile.name = n.trim().slice(0, 20); saveProfile(profile); };
-export const clearPhoto = () => { delete profile.photo; delete profile.icon; saveProfile(profile); };
+export const clearPhoto = () => { delete profile.photo; if (profile.iconPick === 'photo') { delete profile.icon; delete profile.iconPick; } saveProfile(profile); };
 
 export const HELMET_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46" fill="#ffd54a"/><path d="M20 58a30 30 0 0160 0v8H20z" fill="#9aa5b8"/><path d="M20 58a30 30 0 0160 0H20z" fill="#c4cddd"/><rect x="46" y="22" width="8" height="38" rx="3" fill="#8793a8"/><path d="M20 58L8 36l14 6zM80 58l12-22-14 6z" fill="#f5efe1" stroke="#cdbf9b" stroke-width="2"/><rect x="18" y="58" width="64" height="9" rx="4" fill="#7a6a4f"/><circle cx="50" cy="70" r="5" fill="#ff7a3d"/></svg>`;
 
@@ -29,7 +29,7 @@ export function photoFromFile(file) {
     img.src = url;
   });
 }
-export async function setPhotoFromFile(file) { profile.photo = await photoFromFile(file); delete profile.icon; saveProfile(profile); await makeIcon(); }
+export async function setPhotoFromFile(file) { profile.photo = await photoFromFile(file); saveProfile(profile); if (!profile.iconPick || profile.iconPick === 'photo') await makeIcon(); }
 
 // אייקון אישי 180x180: רקע צבעוני, תמונה בעיגול, מסגרת
 export async function makeIcon() {
@@ -41,7 +41,7 @@ export async function makeIcon() {
   g.beginPath(); g.arc(S / 2, S / 2, 66, 0, 7); g.fillStyle = '#fff'; g.fill();
   g.save(); g.beginPath(); g.arc(S / 2, S / 2, 60, 0, 7); g.clip(); g.drawImage(img, S / 2 - 60, S / 2 - 60, 120, 120); g.restore();
   g.fillStyle = '#ffd54a'; for (const [x, y, r] of [[26, 28, 7], [154, 150, 8], [150, 30, 5]]) { g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
-  profile.icon = c.toDataURL('image/png'); saveProfile(profile); applyIcon(); return profile.icon;
+  profile.icon = c.toDataURL('image/png'); profile.iconPick = 'photo'; saveProfile(profile); applyIcon(); return profile.icon;
 }
 // iOS קורא את ה-apple-touch-icon ברגע ההוספה למסך הבית, ולכן data URI מקומי עובד בלי לפרסם את התמונה.
 export function applyIcon() {
@@ -49,6 +49,32 @@ export function applyIcon() {
   let l = document.querySelector('link[rel="apple-touch-icon"]');
   if (!l) { l = document.createElement('link'); l.rel = 'apple-touch-icon'; document.head.append(l); }
   l.href = profile.icon;
+  const f = document.querySelector('link[rel="icon"]'); if (f) f.href = profile.icon;
+}
+
+// בורר אייקונים: 12 מוכנים + תמונה מהמכשיר. נשמר כ-data URI של 180px, כמו האייקון האישי.
+export const ICON_COUNT = 12;
+export const iconPath = (n) => `icons/choices/i${String(n).padStart(2, '0')}.png`;
+export async function pickPresetIcon(n) {
+  const blob = await (await fetch(iconPath(n))).blob();
+  profile.icon = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
+  profile.iconPick = n; saveProfile(profile); applyIcon();
+}
+export async function setCustomIcon(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const S = 180, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+    const m = Math.min(img.naturalWidth, img.naturalHeight);
+    g.fillStyle = '#fff'; g.fillRect(0, 0, S, S);
+    g.drawImage(img, (img.naturalWidth - m) / 2, (img.naturalHeight - m) / 2, m, m, 0, 0, S, S);
+    profile.icon = c.toDataURL('image/png'); profile.iconPick = 'custom'; saveProfile(profile); applyIcon();
+  } finally { URL.revokeObjectURL(url); }
+}
+export function resetIcon() {
+  delete profile.icon; delete profile.iconPick; saveProfile(profile);
+  const l = document.querySelector('link[rel="apple-touch-icon"]'); if (l) l.href = 'icons/apple-touch-icon.png';
+  const f = document.querySelector('link[rel="icon"]'); if (f) f.href = 'icons/icon-192.png';
 }
 
 export function confetti() {

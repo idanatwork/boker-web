@@ -256,3 +256,9 @@ button.big{border-radius:24px;min-height:60px;font-size:20px}
 .tab.on{background:linear-gradient(135deg,#ffb347,#ff6f8e);color:#2b1400}
 .tab svg{width:22px;height:22px}
 #home{color:var(--text)}#home .steps .dot{border-color:var(--line)}#home .hero-clouds{filter:none}
+
+.icon-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.icon-grid button{padding:0;border:3px solid transparent;border-radius:22%;background:none;aspect-ratio:1;overflow:hidden;cursor:pointer;box-shadow:0 0 0 1px rgba(0,0,0,.08)}
+.icon-grid button img{width:100%;height:100%;display:block;object-fit:cover}
+.icon-grid button[aria-checked=true]{border-color:#ff4f8b;box-shadow:0 0 0 2px #fff,0 0 0 4px #ff4f8b}
+.icon-grid + .rowflex{flex-wrap:wrap}.icon-grid + .rowflex button{white-space:nowrap}

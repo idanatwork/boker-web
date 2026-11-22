@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="קום!">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<script>try{var m=/[?&]icon=(0[1-9]|1[0-2])(&|$)/.exec(location.search);if(m)document.querySelector('link[rel=apple-touch-icon]').href='icons/choices/i'+m[1]+'.png'}catch(e){}</script>
 <link rel="icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="style.css">
 <title>קום!</title>
@@ -119,6 +120,13 @@
         <p class="note" style="margin-top:12px">התמונה והשם נשמרים רק במכשיר הזה. הם לא עולים לשרת או לגיטהאב.</p>
         <div class="rowflex" style="margin-top:12px"><button id="iconBtn" class="primary sm">צור אייקון אישי</button></div>
         <p class="note" id="iconNote" style="margin-top:8px">האייקון נוצר מהתמונה ומהווה את האייקון כשמוסיפים למסך הבית. אחרי היצירה: מחק את האפליקציה מהמסך הבית, פתח את האתר ב-Safari והוסף למסך הבית מחדש.</p>
+      </div></section>
+    <section class="block"><div class="block-head"><h2>אייקון האפליקציה</h2></div>
+      <div class="card">
+        <div id="iconGrid" class="icon-grid" role="radiogroup" aria-label="בחירת אייקון"></div>
+        <div class="rowflex" style="margin-top:12px"><button id="iconUpBtn" class="ghost sm">העלה תמונה משלך</button><button id="iconReset" class="link" hidden>חזרה לברירת מחדל</button><button id="iconLink" class="link" hidden>העתק קישור</button></div>
+        <input type="file" id="iconFile" accept="image/*" hidden>
+        <p class="note" style="margin-top:10px">האייקון במסך הבית נקבע ברגע ההוספה ואי אפשר לשנות אותו אחר כך. כדי לראות אייקון חדש: מחק את האפליקציה מהמסך הבית, פתח אותה ב-Safari, בחר אייקון כאן, והוסף למסך הבית שוב. מחיקת האפליקציה מוחקת גם את ההגדרות שבתוכה. אפשר גם להעתיק קישור (לאייקונים המוכנים) ולפתוח אותו ב-Safari. הבחירה והתמונה נשארות במכשיר.</p>
       </div></section>
     <section class="block"><div class="block-head"><h2>התראות</h2></div><div id="setNotif" class="card"></div></section>
     <section class="block"><div class="block-head"><h2>שעת שינה</h2></div><div id="setBed" class="card"></div></section>
